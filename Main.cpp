@@ -20,6 +20,7 @@ public:
 	{
 		sAppName = "TetriTiler";
 	}
+	std::mt19937 mtEngine;
 	struct Rect
 	{
 		olc::vf2d pos;
@@ -37,15 +38,21 @@ public:
 	{
 		uint16_t cornerA, side, cornerB;
 	};
+	struct SpriteTile
+	{
+		uint16_t tiletype;
+		uint16_t tileNumber;
+		Edge north, east, south, west;
+	};
 	struct Tile
 	{
 		bool flippedH = false;
 		bool flippedV = false;
 		uint16_t tiletype;
-		uint16_t tileNumber;
+		uint16_t tileNumber = -1;
 		Edge north, east, south, west;
 		Rect rect;
-		std::vector<uint16_t> tilesAvailable;
+		std::vector<SpriteTile> tilesAvailable;
 	};
 	void SetEdge(Tile& t, int edgeToSet, uint16_t a, uint16_t s, uint16_t b)
 	{
@@ -73,54 +80,106 @@ public:
 	{
 		if (b.tiletype < 0)
 		{
-			//tile is next to empty grid handle this logic
+			return;
 		}
-		Edge bEdgeTranslated = a.north;
-		Edge aEdgeTranslated = b.south;
-		switch (edgeToCompare)
+		for (uint16_t i = 0; i < a.tilesAvailable.size(); i++)
 		{
-		case 0:
-			bEdgeTranslated = b.south;
-			if (b.flippedV) bEdgeTranslated = b.north;
-			if (b.flippedH) bEdgeTranslated = InvertEdge(bEdgeTranslated);
-			aEdgeTranslated = a.north;
-			if (a.flippedV) bEdgeTranslated = a.south;
-			if (a.flippedH) bEdgeTranslated = InvertEdge(aEdgeTranslated);
-			break;
-		case 1:
-			bEdgeTranslated = b.west;
-			if (b.flippedH) bEdgeTranslated = b.east;
-			if (b.flippedV) bEdgeTranslated = InvertEdge(bEdgeTranslated);
-			aEdgeTranslated = a.east;
-			if (a.flippedH) bEdgeTranslated = a.west;
-			if (a.flippedV) bEdgeTranslated = InvertEdge(aEdgeTranslated);
-			break;
-		case 2:
-			bEdgeTranslated = b.north;
-			if (b.flippedV) bEdgeTranslated = b.south;
-			if (b.flippedH) bEdgeTranslated = InvertEdge(bEdgeTranslated);
-			aEdgeTranslated = a.south;
-			if (a.flippedV) bEdgeTranslated = a.north;
-			if (a.flippedH) bEdgeTranslated = InvertEdge(aEdgeTranslated);
-			break;
-		case 3:
-			bEdgeTranslated = b.east;
-			if (b.flippedH) bEdgeTranslated = b.west;
-			if (b.flippedV) bEdgeTranslated = InvertEdge(bEdgeTranslated);
-			aEdgeTranslated = a.west;
-			if (a.flippedH) bEdgeTranslated = a.east;
-			if (a.flippedV) bEdgeTranslated = InvertEdge(aEdgeTranslated);
-			break;
-		}
-		if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
-		{
-			a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), b.tileNumber), a.tilesAvailable.end());
+			Edge bEdgeTranslated = a.tilesAvailable[i].north;
+			Edge aEdgeTranslated = b.south;
+			switch (edgeToCompare)
+			{
+			case 0:
+				bEdgeTranslated = b.south;
+				if (b.flippedV) bEdgeTranslated = b.north;
+				if (b.flippedH) bEdgeTranslated = InvertEdge(bEdgeTranslated);
+				aEdgeTranslated = a.tilesAvailable[i].north;
+				if (a.flippedV) aEdgeTranslated = a.tilesAvailable[i].south;
+				if (a.flippedH) aEdgeTranslated = InvertEdge(aEdgeTranslated);
+				break;
+			case 1:
+				bEdgeTranslated = b.west;
+				if (b.flippedH) bEdgeTranslated = b.east;
+				if (b.flippedV) bEdgeTranslated = InvertEdge(bEdgeTranslated);
+				aEdgeTranslated = a.tilesAvailable[i].east;
+				if (a.flippedH) aEdgeTranslated = a.tilesAvailable[i].west;
+				if (a.flippedV) aEdgeTranslated = InvertEdge(aEdgeTranslated);
+				break;
+			case 2:
+				bEdgeTranslated = b.north;
+				if (b.flippedV) bEdgeTranslated = b.south;
+				if (b.flippedH) bEdgeTranslated = InvertEdge(bEdgeTranslated);
+				aEdgeTranslated = a.tilesAvailable[i].south;
+				if (a.flippedV) aEdgeTranslated = a.tilesAvailable[i].north;
+				if (a.flippedH) aEdgeTranslated = InvertEdge(aEdgeTranslated);
+				break;
+			case 3:
+				bEdgeTranslated = b.east;
+				if (b.flippedH) bEdgeTranslated = b.west;
+				if (b.flippedV) bEdgeTranslated = InvertEdge(bEdgeTranslated);
+				aEdgeTranslated = a.tilesAvailable[i].west;
+				if (a.flippedH) aEdgeTranslated = a.tilesAvailable[i].east;
+				if (a.flippedV) aEdgeTranslated = InvertEdge(aEdgeTranslated);
+				break;
+			}
+			if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
+			{
+				a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), a.tilesAvailable[i]), a.tilesAvailable.end());
+				i--;
+			}
 		}
 	}
 	bool EdgeComparison(Edge a, Edge b)
 	{
 		if (a.cornerA == b.cornerA&& a.side == b.side && a.cornerB == b.cornerB) return true;
 		return false;
+	}
+	bool BeginColapse(uint32_t gridX, uint32_t gridY, std::vector<std::vector<Tile>>& playboard, float fElapsedTime)
+	{
+		bool check = false;
+		for (uint32_t y = 0; y < gridY; y++)
+		{
+			for (uint32_t x = 0; x < gridX; x++)
+			{
+				if (playboard[y][x].tiletype >= 0 && playboard[y][x].tileNumber == -1)
+				{
+					check = true;
+				}
+			}
+		}
+		if (!check) return check;
+		CheckGridForCollapse(gridX, gridY, playboard);
+		return check;
+	}
+	void CheckGridForCollapse(uint32_t gridX, uint32_t gridY, std::vector<std::vector<Tile>>& playboard)
+	{
+		std::vector<std::vector<Tile>> playboard_ = playboard;
+		Tile* t = nullptr;// = playboard_[0][0];
+		uint16_t lowestpossible = UINT16_MAX;
+		for (uint32_t y = 0; y < gridY; y++)
+		{
+			for (uint32_t x = 0; x < gridX; x++)
+			{
+				if (playboard_[y][x].tiletype >= 0)
+				{
+					if (x > 0) CompareTiles(playboard_[y][x], playboard_[y][x - 1], 3);
+					if (y > 0) CompareTiles(playboard_[y][x], playboard_[y-1][x], 0);
+					if (x < gridX-1) CompareTiles(playboard_[y][x], playboard_[y][x + 1], 1);
+					if (y < gridY-1) CompareTiles(playboard_[y][x], playboard_[y+1][x], 2);
+					if (t == nullptr)t = &playboard_[y][x];
+					if (playboard_[y][x].tilesAvailable.size() < lowestpossible)
+					{
+						lowestpossible = playboard_[y][x].tilesAvailable.size();
+						t = &playboard_[y][x];
+					}
+				}
+			}
+		}
+		//collapse t
+
+		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
+		t->tileNumber = t->tilesAvailable[dist(mtEngine)].tileNumber;
+		//add puff animation and screen shake
+		playboard = playboard_;
 	}
 
 private:
@@ -135,11 +194,11 @@ private:
 		z =6,
 	    
 	};
-	struct Rect
-	{
-		olc::vf2d pos;
-		olc::vf2d size;
-	};
+	//struct Rect
+	//{
+	//	olc::vf2d pos;
+	//	olc::vf2d size;
+	//};
 	
 	struct tetriminoes
 	{
@@ -225,6 +284,11 @@ private:
 						olc::vf2d newVf2d = olc::vf2d( size.x * x,size.y * y );
 						blockPositions[y][x] = newVf2d;
 					}
+					else //give block position an invalid value
+					{
+						olc::vf2d negativePos = olc::vf2d{ -1.0,-1.0 };
+						blockPositions[y][x] = negativePos;
+					}
 					x++;
 				}
 				x = 0;
@@ -257,15 +321,17 @@ private:
 			{
 				for (auto c = b->begin(); c < b->end(); c++)
 				{
-					if (i->selected == false)
+					if (c->x != -1)//check if block position is valid
 					{
-						FillRectDecal(*c + i->pallettePos, i->sizePerBlock);
+						if (i->selected == false)
+						{
+							FillRectDecal(*c + i->pallettePos, i->sizePerBlock);
+						}
+						else
+						{
+							FillRectDecal(*c + i->pallettePos, i->sizePerBlock, olc::YELLOW);
+						}
 					}
-					else
-					{
-						FillRectDecal(*c + i->pallettePos, i->sizePerBlock,olc::YELLOW);
-					}
-					
 				}
 			
 			}
@@ -372,6 +438,8 @@ private:
 	}
 	bool OnUserCreate() override
 	{
+		std::random_device rd();
+		mtEngine.seed(rd);
 		initPallette();
 		initTetriminoes();
 		return true;
