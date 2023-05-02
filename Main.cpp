@@ -31,6 +31,12 @@ private:
 		z =6,
 	    
 	};
+	struct Rect
+	{
+		olc::vf2d pos;
+		olc::vf2d size;
+	};
+	
 	struct tetriminoes
 	{
 		std::vector<std::string> blockStrings;
@@ -39,8 +45,17 @@ private:
 		olc::vf2d sizePerBlock;
 		olc::vf2d pallettePos;
 		olc::vf2d placedPos;
+		bool selected = false;
+		int tileType;
+		//tetriminoes();
+		tetriminoes()
+		{
+			tileType = 8;
+		}
 		tetriminoes(int type, olc::vf2d size)
 		{
+			tileType = type;
+
 			blockStrings.clear();
 			blockPositions.resize(4);
 			for (auto i = blockPositions.begin(); i < blockPositions.end(); i++)
@@ -114,45 +129,153 @@ private:
 		}
 
 	};
+	struct Pallete
+	{
+		Rect palleteRect;
+		std::vector<tetriminoes>pallettetetrisTiles;
+	};
+	struct PlayField
+	{
+		Rect playFieldRect;
+		std::vector<tetriminoes>tetrisTiles;
+	};
+	Pallete pallette;
+	PlayField playField;
 	std::vector<tetriminoes>tetrisTiles;
+	tetriminoes selectedTile;
+
 	void drawTetriminoes(float fElapsedTime)
 	{
 		
-		for (auto i = tetrisTiles.begin(); i < tetrisTiles.end(); i++)
+		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
 			for (auto b	 = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
 			{
 				for (auto c = b->begin(); c < b->end(); c++)
 				{
-					FillRectDecal(*c + i->pallettePos, i->sizePerBlock);
+					if (i->selected == false)
+					{
+						FillRectDecal(*c + i->pallettePos, i->sizePerBlock);
+					}
+					else
+					{
+						FillRectDecal(*c + i->pallettePos, i->sizePerBlock,olc::YELLOW);
+					}
+					
 				}
 			
 			}
 		}
+		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+		{
+			for (auto x = i->blockPositions.begin(); x <i->blockPositions.end(); x++)
+			{
+				for (auto c = x->begin(); c < x->end(); c++)
+				{
+					FillRectDecal(i->placedPos + *c, i->sizePerBlock);
+				}
+			}	
+		}
+		if (selectedTile.tileType!=8)
+		{
+			for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+			{
+				
+				for (auto b = i->begin(); b <i->end(); b++)
+				{
+					
+					FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock);
+				}
+			}
+		}
+		
 	}
+	void drawPlayfield(float fElapsedTime)
+	{
+		
+	}
+	void drawPalletteField(float fElapsedTime)
+	{
+		FillRectDecal(pallette.palleteRect.pos, pallette.palleteRect.size, olc::Pixel(200, 200, 200, 200));
+	}
+	void drawScreen(float fElapsedTime)
+	{
+		drawPalletteField(fElapsedTime);
+		drawPlayfield(fElapsedTime);
+		drawTetriminoes(fElapsedTime);
+	}
+	
 	void initTetriminoes()
 	{
 		for (int i = 0; i < 7; i++)
 		{
 			tetriminoes newtetristile(i, { 10,10 });
-			tetrisTiles.emplace_back(newtetristile);
+			pallette.pallettetetrisTiles.emplace_back(newtetristile);
 		}
 		float x = 0;
-		for (auto i = tetrisTiles.begin(); i < tetrisTiles.end(); i++)
+		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
-			i->pallettePos = { 100,100 * x + 50 };
+			i->pallettePos = { (pallette.palleteRect.pos.x+5) +100 *x,pallette.palleteRect.pos.y +20  };
 			x++;
 		}
 		bool breaker = true;
 	}
+	void initPallette()
+	{
+		pallette.palleteRect.pos = olc::vf2d( 5,ScreenHeight() - 150 );
+		pallette.palleteRect.size = olc::vf2d(ScreenWidth() - 5,140 );
+	}
+	bool CheckCollision(olc::vf2d objapos, olc::vf2d objbpos, olc::vf2d objaSize, olc::vf2d objbsize)
+
+	{
+
+		if (objapos.x < objbpos.x + objbsize.x && objapos.x + objaSize.x> objbpos.x) {
+			if (objapos.y < objbpos.y + objbsize.y && objapos.y + objaSize.y > objbpos.y)
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+	void controls(float fElapsedTime)
+	{
+		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
+		{
+			for (auto b = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
+			{
+				for (auto c = b->begin(); c < b->end(); c++)
+				{
+					if (CheckCollision(olc::vf2d(GetMousePos()),*c,{50,50},i->sizePerBlock))
+					{
+						i->selected = true;
+					}
+					else
+					{
+						i->selected = false;
+					}
+				}
+			}
+		}
+		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
+		{
+			if (i->selected == true)
+			{
+
+				
+				
+			}
+		}
+	}
 	bool OnUserCreate() override
 	{
+		initPallette();
 		initTetriminoes();
 		return true;
 	}
 	bool OnUserUpdate(float fElapsedTime) override
 	{
-		drawTetriminoes(fElapsedTime);
+		controls(fElapsedTime);
+		drawScreen(fElapsedTime);
 		return true;
 	}
 
