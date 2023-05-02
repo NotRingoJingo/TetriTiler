@@ -186,7 +186,7 @@ public:
 private:
 	enum shapes
 	{
-		i = 0,
+		I = 0,
 		o = 1,
 		t = 2,
 		j =3,
@@ -232,7 +232,7 @@ private:
 			float y = 0;
 			switch (type)
 			{
-			case i:
+			case I:
 				blockStrings.push_back("1111");
 				blockStrings.push_back("0000");
 				blockStrings.push_back("0000");
@@ -514,8 +514,7 @@ private:
 				}
 			}
 		}
-		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
-		{
+	
 			if (selectedTile.unplacable == false)
 			{
 				if (GetMouse(olc::Mouse::LEFT).bReleased)
@@ -526,12 +525,13 @@ private:
 
 
 			}
-		}
+		
 	}
 	void controls(float fElapsedTime)
 	{
-		selectTile();
+		
 		placeTile();
+		selectTile();
 	}
 	void updateSelectedTile()
 	{
@@ -539,7 +539,7 @@ private:
 		{
 			for (auto b = i->begin(); b < i->end(); b++)
 			{
-				*b = *b + olc::vf2d(GetMousePos());
+				*b + olc::vf2d(GetMousePos());
 			}
 		}
 	}
