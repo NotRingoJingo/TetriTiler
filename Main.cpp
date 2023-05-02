@@ -46,6 +46,7 @@ private:
 		olc::vf2d pallettePos;
 		olc::vf2d placedPos;
 		bool selected = false;
+		bool unplacable = false;
 		int tileType;
 		//tetriminoes();
 		tetriminoes()
@@ -127,6 +128,7 @@ private:
 				y++;
 			}
 		}
+		
 
 	};
 	struct Pallete
@@ -134,10 +136,37 @@ private:
 		Rect palleteRect;
 		std::vector<tetriminoes>pallettetetrisTiles;
 	};
+	struct emptyCells
+	{
+		Rect cell;
+		bool empty = false;
+	};
 	struct PlayField
 	{
+		std::vector<std::vector<emptyCells>> playfieldCells;
 		Rect playFieldRect;
 		std::vector<tetriminoes>tetrisTiles;
+		PlayField()
+		{
+			int x = 0;
+			int y = 0;
+			playfieldCells.resize(60);
+			for (int i = 0; i < playfieldCells.size(); i++)
+			{
+				playfieldCells[i].resize(40);
+			}
+			for (auto i = playfieldCells.begin(); i < playfieldCells.end(); i++)
+			{
+				for (auto b = i->begin(); b < i->end(); b++)
+				{
+					b->cell.pos = olc::vf2d(0 + 10*x, 0 + 10*y);
+					b->cell.size = olc::vf2d(10, 10);
+					x++;
+				}
+				x = 0;
+				y++;
+			}
+		}
 	};
 	Pallete pallette;
 	PlayField playField;
@@ -183,8 +212,14 @@ private:
 				
 				for (auto b = i->begin(); b <i->end(); b++)
 				{
-					
-					FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock);
+					if (selectedTile.unplacable ==false)
+					{
+						FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock);
+					}
+					else
+					{
+						FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock, olc::RED);
+					}
 				}
 			}
 		}
@@ -192,7 +227,13 @@ private:
 	}
 	void drawPlayfield(float fElapsedTime)
 	{
-		
+		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
+		{
+			for (auto b = i->begin(); b < i->end(); b++)
+			{
+				DrawRect(b->cell.pos, b->cell.size, olc::RED);
+			}
+		}
 	}
 	void drawPalletteField(float fElapsedTime)
 	{
@@ -237,7 +278,7 @@ private:
 		}
 		return false;
 	}
-	void controls(float fElapsedTime)
+	void selectTile()
 	{
 		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
@@ -245,7 +286,7 @@ private:
 			{
 				for (auto c = b->begin(); c < b->end(); c++)
 				{
-					if (CheckCollision(olc::vf2d(GetMousePos()),*c,{50,50},i->sizePerBlock))
+					if (CheckCollision(olc::vf2d(GetMousePos()), *c + i->pallettePos, { 50,50 }, i->sizePerBlock))
 					{
 						i->selected = true;
 					}
@@ -260,9 +301,74 @@ private:
 		{
 			if (i->selected == true)
 			{
+				if (GetMouse(olc::Mouse::LEFT).bReleased)
+				{
+					selectedTile = *i;
+				}
 
-				
-				
+
+			}
+		}
+	}
+	void placeTile()
+	{
+		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+		{
+			for (auto b = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
+			{
+				for (auto c = b->begin(); c < b->end(); c++)
+				{
+					if (CheckCollision(olc::vf2d(GetMousePos()), *c + i->placedPos, { 50,50 }, i->sizePerBlock))
+					{
+						selectedTile.unplacable = true;
+					}
+					else
+					{
+						selectedTile.unplacable = false;
+					}
+				}
+			}
+		}
+		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+		{
+			for (auto b = i->begin(); b < i->end(); b++)
+			{
+				if (CheckCollision(olc::vf2d(GetMousePos())+*b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
+				{
+					selectedTile.unplacable = true;
+				}
+				else
+				{
+					selectedTile.unplacable = false;
+				}
+			}
+		}
+		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+		{
+			if (selectedTile.unplacable == false)
+			{
+				if (GetMouse(olc::Mouse::LEFT).bReleased)
+				{
+					
+					playField.tetrisTiles.emplace_back(selectedTile);
+				}
+
+
+			}
+		}
+	}
+	void controls(float fElapsedTime)
+	{
+		selectTile();
+		placeTile();
+	}
+	void updateSelectedTile()
+	{
+		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+		{
+			for (auto b = i->begin(); b < i->end(); b++)
+			{
+				*b = *b + olc::vf2d(GetMousePos());
 			}
 		}
 	}
@@ -274,6 +380,7 @@ private:
 	}
 	bool OnUserUpdate(float fElapsedTime) override
 	{
+		updateSelectedTile();
 		controls(fElapsedTime);
 		drawScreen(fElapsedTime);
 		return true;
