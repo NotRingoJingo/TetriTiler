@@ -123,7 +123,8 @@ public:
 			}
 			if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
 			{
-				a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), a.tilesAvailable[i]), a.tilesAvailable.end());
+				a.tilesAvailable.erase(a.tilesAvailable.begin() + 1);
+				//a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), i), a.tilesAvailable.end());
 				i--;
 			}
 		}
@@ -544,8 +545,8 @@ private:
 	}
 	bool OnUserCreate() override
 	{
-		std::random_device rd();
-		mtEngine.seed(rd);
+		//std::random_device rd();
+		mtEngine.seed(1794);
 		initPallette();
 		initTetriminoes();
 		return true;
