@@ -481,15 +481,33 @@ private:
 			}
 		}
 	}
+	olc::vf2d nearestCell(olc::vf2d block)
+	{
+		olc::vf2d nearbyCell(1000,1000);
+		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
+		{
+			for (auto c = i->begin(); c < i->end(); c++)
+			{
+				if (c->cell.pos - block <nearbyCell)
+				{
+					nearbyCell = c->cell.pos;
+				}
+			}
+		}
+		return nearbyCell;
+	}
 	void placeTile()
 	{
-		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+		for (auto s = selectedTile.blockPositions.begin(); s < selectedTile.blockPositions.end(); s++)
 		{
-			for (auto b = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
+			for (auto t = s->begin(); t < s->end(); t++)
 			{
-				for (auto c = b->begin(); c < b->end(); c++)
+
+
+
+				for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
 				{
-					if (CheckCollision(olc::vf2d(GetMousePos()), *c + i->placedPos, { 50,50 }, i->sizePerBlock))
+					if (CheckCollision(olc::vf2d(GetMousePos()) + *t, i->placedPos, { 50,50 }, i->sizePerBlock))
 					{
 						selectedTile.unplacable = true;
 					}
@@ -497,6 +515,8 @@ private:
 					{
 						selectedTile.unplacable = false;
 					}
+
+							
 				}
 			}
 		}
@@ -514,17 +534,26 @@ private:
 				}
 			}
 		}
-	
-			if (selectedTile.unplacable == false)
+		if (selectedTile.unplacable == true)
+		{
+			bool breakthis = true;
+		}
+		if (GetKey(olc::SPACE).bReleased)
+		{
+ 			bool breaker = true;
+		}
+		if (selectedTile.unplacable == false)
+		{
+			if (GetMouse(olc::Mouse::LEFT).bReleased)
 			{
-				if (GetMouse(olc::Mouse::LEFT).bReleased)
-				{
-					
-					playField.tetrisTiles.emplace_back(selectedTile);
-				}
-
-
+				olc::vf2d celltoplace = nearestCell(olc::vf2d(GetMousePos()));
+				selectedTile.placedPos = olc::vf2d(GetMousePos());
+				playField.tetrisTiles.emplace_back(selectedTile);
 			}
+
+
+		}
+			
 		
 	}
 	void controls(float fElapsedTime)
