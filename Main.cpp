@@ -296,7 +296,16 @@ private:
 				x = 0;
 				y++;
 			}
-		}
+			
+			for (int i = 0; i < blockPositions.size(); i++)
+			{
+				//std::remove_if(blockPositions[i].begin(), blockPositions[i].end(), toBeRemoved());
+				blockPositions[i].erase(std::remove_if(blockPositions[i].begin(), blockPositions[i].end(), [](const olc::vf2d& v) {
+					return v.x < 0 || v.y < 0;
+					}), blockPositions[i].end());
+			}
+			
+	    }
 		
 
 	};
@@ -481,20 +490,37 @@ private:
 			}
 		}
 	}
-	olc::vf2d nearestCell(olc::vf2d block)
+	olc::vf2d nearestCell()
 	{
-		olc::vf2d nearbyCell(1000,1000);
+		olc::vf2d maxXvec = { 0,0 };
+		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+		{
+			for (auto b = i->begin(); b < i->end(); b++)
+			{
+				if (b->x > maxXvec.x)
+				{
+					maxXvec = *b;
+				}
+			}
+		}
+		
+		olc::vf2d nearest_vec = playField.playfieldCells[0][0].cell.pos; // Start with the first vec2
+		float min_distance = distance(maxXvec, nearest_vec);
 		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
 		{
 			for (auto c = i->begin(); c < i->end(); c++)
 			{
-				if (c->cell.pos - block <nearbyCell)
-				{
-					nearbyCell = c->cell.pos;
+				float d = distance(maxXvec, c->cell.pos);
+				if (d < min_distance) {
+					min_distance = d;
+					nearest_vec = c->cell.pos;
 				}
 			}
 		}
-		return nearbyCell;
+		return nearest_vec;
+	}
+	float distance(const olc::vf2d& a, const olc::vf2d& b) {
+		return std::sqrt(std::pow(b.x - a.x, 2) + std::pow(b.y - a.y, 2));
 	}
 	void placeTile()
 	{
@@ -546,8 +572,8 @@ private:
 		{
 			if (GetMouse(olc::Mouse::LEFT).bReleased)
 			{
-				olc::vf2d celltoplace = nearestCell(olc::vf2d(GetMousePos()));
-				selectedTile.placedPos = olc::vf2d(GetMousePos());
+				olc::vf2d celltoplace = nearestCell();
+				selectedTile.placedPos = olc::vf2d(celltoplace);
 				playField.tetrisTiles.emplace_back(selectedTile);
 			}
 
