@@ -207,6 +207,8 @@ private:
 		std::vector<std::vector<olc::vf2d>> blockPositions;
 		olc::Pixel material;
 		olc::vf2d sizePerBlock;
+		olc::vf2d firstPos = {-1,-1};
+		olc::vf2d lastPos;
 		olc::vf2d pallettePos;
 		olc::vf2d placedPos;
 		bool selected = false;
@@ -304,7 +306,19 @@ private:
 					return v.x < 0 || v.y < 0;
 					}), blockPositions[i].end());
 			}
-			
+			for (auto i = blockPositions.begin(); i < blockPositions.end(); i++)
+			{
+				for (auto b = i->begin(); b < i->end(); b++)
+				{
+					if (firstPos == olc::vf2d(-1,-1))
+					{
+						firstPos = *b;
+						
+					}
+					lastPos = *b;
+				}
+			}
+			bool breakthis = true;
 	    }
 		
 
@@ -492,7 +506,8 @@ private:
 	}
 	olc::vf2d nearestCell()
 	{
-		olc::vf2d maxXvec = { 0,0 };
+		//need to have a start pos and end pos added to struct for finding cells and divide mouse pos by block size
+		/*olc::vf2d maxXvec = { 0,0 };
 		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
 		{
 			for (auto b = i->begin(); b < i->end(); b++)
@@ -502,15 +517,15 @@ private:
 					maxXvec = *b;
 				}
 			}
-		}
+		}*/
 		
 		olc::vf2d nearest_vec = playField.playfieldCells[0][0].cell.pos; // Start with the first vec2
-		float min_distance = distance(maxXvec, nearest_vec);
+		float min_distance = distance(selectedTile.firstPos, nearest_vec);
 		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
 		{
 			for (auto c = i->begin(); c < i->end(); c++)
 			{
-				float d = distance(maxXvec, c->cell.pos);
+				float d = distance(selectedTile.firstPos, c->cell.pos);
 				if (d < min_distance) {
 					min_distance = d;
 					nearest_vec = c->cell.pos;
