@@ -11,6 +11,11 @@
 # include <string>
 # include <sstream>
 # include <random>
+# include <iostream>
+# include <filesystem>
+
+namespace fs = std::filesystem;
+
 
 #define M_PI 3.14159265358979323846
 class Engine : public olc::PixelGameEngine
@@ -21,6 +26,8 @@ public:
 		sAppName = "TetriTiler";
 	}
 	std::mt19937 mtEngine;
+	std::vector<std::unique_ptr<olc::Sprite>> spriteSheets;
+	std::vector<std::unique_ptr<olc::Decal>> vecS_Decals;
 	struct Rect
 	{
 		olc::vf2d pos;
@@ -54,7 +61,8 @@ public:
 		Rect rect;
 		std::vector<SpriteTile> tilesAvailable;
 	};
-	void SetEdge(Tile& t, int edgeToSet, uint16_t a, uint16_t s, uint16_t b)
+	std::vector<std::vector<SpriteTile>> AllBaseTiles;
+	void SetEdge(SpriteTile& t, int edgeToSet, uint16_t a, uint16_t s, uint16_t b)
 	{
 		switch (edgeToSet)
 		{
@@ -178,9 +186,177 @@ public:
 		//collapse t
 
 		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
+
 		t->tileNumber = t->tilesAvailable[dist(mtEngine)].tileNumber;
+		t->east = AllBaseTiles[t->tiletype][t->tileNumber].east;
+		t->north = AllBaseTiles[t->tiletype][t->tileNumber].north;
+		t->west = AllBaseTiles[t->tiletype][t->tileNumber].west;
+		t->south = AllBaseTiles[t->tiletype][t->tileNumber].south;
+
 		//add puff animation and screen shake
 		playboard = playboard_;
+	}
+
+	void InitializeSpritesDecals()
+	{
+		std::string path = "./assets";
+		std::vector<std::filesystem::path> fileNames;
+		std::vector<std::string> extensionTypes = { ".png",".jpg",".bmp" };
+		for (const auto& fileToLoad : fs::directory_iterator(path))
+		{
+			fileNames.push_back(fileToLoad.path());
+		}
+		for (int i = 0; i < fileNames.size(); i++)
+		{
+			//fileStringNames.push_back(fileNames[i].filename().string());
+			bool tokenPass = false;
+			for (int j = 0; j < extensionTypes.size(); j++)
+			{
+				if (fileNames[i].extension().string() == extensionTypes[j])
+				{
+					tokenPass = true;
+					break;
+				}
+			}
+			if (tokenPass)
+			{
+				spriteSheets.push_back(std::make_unique<olc::Sprite>("./assets/" + fileNames[i].filename().string()));
+				//std::cout << fileNames[i].filename().string() << std::endl;
+			}
+		}
+		for (int i = 0; i < spriteSheets.size(); i++)
+		{
+			vecS_Decals.push_back(std::make_unique<olc::Decal>(spriteSheets[i].get()));
+			//std::cout << vecS_Decals[i].get()->sprite->height << std::endl;
+		}
+	}
+
+	void SetBuiltInEdges()
+	{
+		uint16_t type = 0;
+		uint16_t tileNum = 0;
+		for (int i = 0; i < vecS_Decals.size(); i++)
+		{
+			std::vector<SpriteTile> st;
+			for (int y = 0; y < 3; y++)
+			{
+				for (int x = 0; x < 3; x++)
+				{
+					st.push_back(SpriteTile{ type,tileNum });
+					tileNum++;
+				}
+			}
+			if (i + 1 % 7)
+			{
+				type += 1;
+				tileNum = 0;
+				AllBaseTiles.push_back(st);
+			}
+		}
+		int spriteTileLoop = 0;
+		int edgeType = 0;
+		for (int i = 0; i < AllBaseTiles.size(); i++)
+		{
+			
+			for (int j = 0; j < AllBaseTiles[i].size(); j++)
+			{
+				uint16_t eT = 0;
+				switch (edgeType)
+				{
+				case 0:
+					eT = 5;
+					break;
+				case 1:
+					eT = 3;
+					break;
+				case 2:
+					eT = 2;
+					break;
+				case 3:
+					eT = 6;
+					break;
+				case 4:
+					eT = 4;
+					break;
+				case 5:
+					eT = 1;
+					break;
+				case 6:
+					eT = 0;
+					break;
+				case 7:
+					eT = -1;
+					break;
+				default:
+					break;
+				}
+				switch (spriteTileLoop)
+				{
+				case 0:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 1:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 2:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 3:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 4:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 5:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 6:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 7:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 8:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				default:
+					break;
+				}
+				spriteTileLoop++;
+				if (spriteTileLoop >= 9)
+				{
+					spriteTileLoop = 0;
+					edgeType++;
+				}
+			}
+		}
 	}
 
 private:
@@ -189,10 +365,10 @@ private:
 		I = 0,
 		o = 1,
 		t = 2,
-		j =3,
+		j = 3,
 		l = 4,
 		s = 5,
-		z =6,
+		z = 6,
 	    
 	};
 	//struct Rect
@@ -617,6 +793,8 @@ private:
 	{
 		//std::random_device rd();
 		mtEngine.seed(1794);
+		InitializeSpritesDecals();
+		SetBuiltInEdges();
 		initPallette();
 		initTetriminoes();
 		return true;
