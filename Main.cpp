@@ -507,7 +507,7 @@ private:
 	struct emptyCells
 	{
 		Rect cell;
-		bool empty = false;
+		bool notempty = false;
 	};
 	struct PlayField
 	{
@@ -601,7 +601,11 @@ private:
 		{
 			for (auto b = i->begin(); b < i->end(); b++)
 			{
-				DrawRect(b->cell.pos, b->cell.size, olc::RED);
+				if (b->notempty == false)
+				{
+					DrawRect(b->cell.pos, b->cell.size, olc::RED);
+				}
+				
 			}
 		}
 	}
@@ -696,16 +700,21 @@ private:
 		}*/
 		
 		olc::vf2d nearest_vec = playField.playfieldCells[0][0].cell.pos; // Start with the first vec2
-		float min_distance = distance(selectedTile.firstPos, nearest_vec);
+		float min_distance = distance(selectedTile.firstPos+GetMousePos(), nearest_vec);
 		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
 		{
 			for (auto c = i->begin(); c < i->end(); c++)
 			{
-				float d = distance(selectedTile.firstPos, c->cell.pos);
-				if (d < min_distance) {
-					min_distance = d;
-					nearest_vec = c->cell.pos;
+				if (c->notempty == false)
+				{
+					float d = distance(selectedTile.firstPos+GetMousePos(), c->cell.pos);
+					if (d < min_distance) {
+						min_distance = d;
+						nearest_vec = c->cell.pos;
+					}
 				}
+				
+				
 			}
 		}
 		return nearest_vec;
@@ -713,27 +722,28 @@ private:
 	float distance(const olc::vf2d& a, const olc::vf2d& b) {
 		return std::sqrt(std::pow(b.x - a.x, 2) + std::pow(b.y - a.y, 2));
 	}
-	void placeTile()
+	bool isUnplacable()
 	{
-		for (auto s = selectedTile.blockPositions.begin(); s < selectedTile.blockPositions.end(); s++)
+		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
 		{
-			for (auto t = s->begin(); t < s->end(); t++)
+			for (auto b = i->begin(); b < i->end(); b++)
 			{
-
-
-
-				for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+				for (auto p = playField.tetrisTiles.begin(); p < playField.tetrisTiles.end(); p++)
 				{
-					if (CheckCollision(olc::vf2d(GetMousePos()) + *t, i->placedPos, { 50,50 }, i->sizePerBlock))
+					for (auto c = p->blockPositions.begin(); c < p->blockPositions.end(); c++)
 					{
-						selectedTile.unplacable = true;
-					}
-					else
-					{
-						selectedTile.unplacable = false;
-					}
+						for (auto d = c->begin(); d < c->end(); d++)
+						{
 
-							
+
+							if (CheckCollision(*b + GetMousePos(), *d+p->placedPos, selectedTile.sizePerBlock, p->sizePerBlock))
+							{
+								return true;
+							}
+						}
+					}
+						
+					
 				}
 			}
 		}
@@ -741,20 +751,20 @@ private:
 		{
 			for (auto b = i->begin(); b < i->end(); b++)
 			{
-				if (CheckCollision(olc::vf2d(GetMousePos())+*b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
+				if (CheckCollision(olc::vf2d(GetMousePos()) + *b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
 				{
-					selectedTile.unplacable = true;
+					return true;
 				}
-				else
-				{
-					selectedTile.unplacable = false;
-				}
+				
 			}
 		}
-		if (selectedTile.unplacable == true)
-		{
-			bool breakthis = true;
-		}
+		return false;
+	}
+	void placeTile()
+	{
+		
+		
+		
 		if (GetKey(olc::SPACE).bReleased)
 		{
  			bool breaker = true;
@@ -766,6 +776,22 @@ private:
 				olc::vf2d celltoplace = nearestCell();
 				selectedTile.placedPos = olc::vf2d(celltoplace);
 				playField.tetrisTiles.emplace_back(selectedTile);
+				for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+				{
+					for (auto b = i->begin(); b < i->end(); b++)
+					{
+						for (auto start =playField.playfieldCells.begin(); start < playField.playfieldCells.end(); start++)
+						{
+							for (auto c = start->begin(); c < start->end(); c++)
+							{
+								if (*b+selectedTile.placedPos == c->cell.pos)
+								{
+									c->notempty = false;
+								}
+							}
+						}
+					}
+				}
 			}
 
 
@@ -788,6 +814,7 @@ private:
 				*b + olc::vf2d(GetMousePos());
 			}
 		}
+		selectedTile.unplacable = isUnplacable();
 	}
 	bool OnUserCreate() override
 	{
