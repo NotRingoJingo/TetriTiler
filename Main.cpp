@@ -13,14 +13,15 @@
 # include <random>
 # include <iostream>
 # include <filesystem>
-
+# include <png.h>
 namespace fs = std::filesystem;
-
+std::unique_ptr<olc::Platform> thisPlatform(olc::platform.get());
 
 #define M_PI 3.14159265358979323846
 class Engine : public olc::PixelGameEngine
 {
 public:
+	
 	Engine()
 	{
 		sAppName = "TetriTiler";
@@ -358,7 +359,7 @@ public:
 			}
 		}
 	}
-
+	HWND pubHwnd = olc::pubHand;
 private:
 	enum shapes
 	{
@@ -530,10 +531,13 @@ private:
 					b->cell.pos = olc::vf2d(0 + 10*x, 0 + 10*y);
 					b->cell.size = olc::vf2d(10, 10);
 					x++;
+					playFieldRect.size.x = b->cell.pos.x + 10;
+					playFieldRect.size.y = b->cell.pos.y + 10;
 				}
 				x = 0;
 				y++;
 			}
+			
 		}
 	};
 	Pallete pallette;
@@ -640,6 +644,186 @@ private:
 		pallette.palleteRect.pos = olc::vf2d( 5,ScreenHeight() - 150 );
 		pallette.palleteRect.size = olc::vf2d(ScreenWidth() - 5,140 );
 	}
+	void makePng() {
+		
+	// Get thewn handle to the window
+	
+		
+		HWND hWnd = olc::platform->GetHwnd();// replace with your co
+		//if (hWnd != nullptr)
+		//{
+		//	// Get the process ID of the process that owns the window
+		//	DWORD processId;
+		//	GetWindowThreadProcessId(hWnd, &processId);
+
+		//	// Open the process with PROCESS_VM_READ permission
+		//	HANDLE processHandle = OpenProcess(PROCESS_VM_READ, FALSE, processId);
+
+		//	if (processHandle != nullptr)
+		//	{
+		//		// Allocate a buffer to hold the title of the window
+		//		const size_t bufferSize = 256;
+		//		LPWSTR buffer = new WCHAR[bufferSize];
+
+		//		// Read the window title from the process memory
+		//		if (ReadProcessMemory(processHandle, (LPCVOID)(hWnd + GWL_STYLE), buffer, bufferSize, nullptr))
+		//		{
+		//			// Display the window title
+		//			std::cout << "Window title: " << buffer ;
+		//		}
+		//		else
+		//		{
+		//			std::cerr << "Failed to read process memory";
+		//		}
+
+		//		// Free the buffer
+		//		delete[] buffer;
+
+		//		// Close the process handle
+		//		CloseHandle(processHandle);
+		//	}
+		//	else
+		//	{
+		//		std::cerr << "Failed to open process" ;
+		//	}
+		//}
+		//else
+		//{
+		//	std::cerr << "Failed to find window";
+		//}
+		// Define the area to capture as a rectangle
+		int x = playField.playFieldRect.pos.x; // replace with your code
+		int y = playField.playFieldRect.pos.y; // replace with your code
+		int w = playField.playFieldRect.size.x; // replace with your code
+		int h = playField.playFieldRect.size.y; // replace with your code
+		RECT rect = { x, y, x + w, y + h };
+
+		// Capture the region to a memory bitmap
+		BYTE* image_data = nullptr ;
+		int width, height;
+		if (capture_window_to_bitmap(hWnd, x, y,w, h, image_data, width, height)) {
+			// Save the captured image to a PNG file
+			save_Png("captured_image.png", image_data, width, height, x, y, w, h);
+			//delete[] image_data;
+		}
+		
+	}
+	bool capture_window_to_bitmap(HWND hWnd, int x, int y, int w, int h, BYTE*& image_data, int& width, int& height) {
+		// Get the window's device context
+
+		HDC hdcWindow = GetDC(hWnd);
+
+		// Get the dimensions of the window
+		RECT rect;
+		//GetClientRect(hWnd, &rect);
+		int window_width = w;
+		int window_height = h;
+
+		// Create a memory device context and a memory bitmap
+		HDC hdcMem = CreateCompatibleDC(hdcWindow);
+		HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, window_width, window_height);
+
+		// Select the memory bitmap into the memory device context
+		HBITMAP hBitmapOld = (HBITMAP)SelectObject(hdcMem, hBitmap);
+
+		// Copy the contents of the window to the memory device context
+		bool bsuccess =BitBlt(hdcMem, 0, 0, window_width, window_height, hdcWindow, 0, 0, SRCCOPY);
+
+		// Get the dimensions of the captured region
+		if (bsuccess)
+		{
+
+
+			width = w;
+			height = h;
+
+			// Allocate memory for the image data
+			image_data = new BYTE[w * h * 4]; // RGBA
+			std::cout << " " + *image_data;
+			// Copy the image data from the bitmap to the image buffer
+			BITMAPINFO bmi = { 0 };
+			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			bmi.bmiHeader.biWidth = window_width;
+			bmi.bmiHeader.biHeight = -window_height; // negative height to indicate top-down bitmap
+			bmi.bmiHeader.biPlanes = 1;
+			bmi.bmiHeader.biBitCount = 32;
+			//bmi.bmiHeader.biCompression = BI_RGB;
+			HBITMAP hDIB = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (void**)&image_data, NULL, 0);
+			if (hDIB!=NULL)
+			{
+				int iBytes = (((width * 32) + 31) / 32) * 4 * height;
+				bsuccess = GetBitmapBits(hBitmap, iBytes, image_data);
+				if (bsuccess)
+				{
+					
+				}
+			}
+			//GetDIBits(hdcMem, hBitmap, y, h, image_data, &bmi, DIB_RGB_COLORS);
+
+			// Deselect the memory bitmap and clean up
+			SelectObject(hdcMem, hBitmapOld);
+			DeleteObject(hBitmap);
+			DeleteDC(hdcMem);
+			ReleaseDC(hWnd, hdcWindow);
+		}
+
+		return bsuccess;
+	}
+	bool save_Png(const char* filename, BYTE* image_data, int width, int height, int x, int y, int w, int h) 
+	{
+		// Open the PNG file for writing
+		FILE* fp;
+		errno_t err = fopen_s(&fp, filename, "wb");
+		if (err != 0 || !fp) {
+			fprintf(stderr, "Error: could not open PNG file %s for writing\n", filename);
+			return false;
+		}
+		/*FILE* fp = fopen(filename, "wb");
+		if (!fp) {
+			std::cerr << "Error: could not open PNG file for writing" << std::endl;
+			return false;
+		}*/
+		png_structp png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
+		if (!png_ptr) {
+			std::cerr << "Error: could not initialize PNG write struct" << std::endl;
+			fclose(fp);
+			return false;
+		}
+		png_infop info_ptr = png_create_info_struct(png_ptr);
+		if (!info_ptr) {
+			std::cerr << "Error: could not initialize PNG info struct" << std::endl;
+			png_destroy_write_struct(&png_ptr, nullptr);
+			fclose(fp);
+			return false;
+		}
+		if (setjmp(png_jmpbuf(png_ptr))) {
+			std::cerr << "Error: an error occurred while writing the PNG file" << std::endl;
+			png_destroy_write_struct(&png_ptr, &info_ptr);
+			fclose(fp);
+			return false;
+		}
+		png_init_io(png_ptr, fp);
+		png_set_IHDR(png_ptr, info_ptr, w, h, 8, PNG_COLOR_TYPE_RGB_ALPHA, PNG_INTERLACE_NONE, PNG_COMPRESSION_TYPE_DEFAULT, PNG_FILTER_TYPE_DEFAULT);
+		png_byte** row_pointers = new png_byte * [h];
+		for (int i = 0; i < h; ++i) {
+			row_pointers[i] = &image_data[((y + i) * width + x) * 4]; // RGBA
+		}
+		// Write the PNG image data
+		png_write_info(png_ptr, info_ptr);
+		png_write_image(png_ptr, row_pointers);
+		png_write_end(png_ptr, nullptr);
+
+		// Clean up memory and close the PNG file
+		delete[] row_pointers;
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		fclose(fp);
+
+		return true;
+	}
+	
+		
+	
+
 	bool CheckCollision(olc::vf2d objapos, olc::vf2d objbpos, olc::vf2d objaSize, olc::vf2d objbsize)
 
 	{
@@ -799,11 +983,20 @@ private:
 			
 		
 	}
+	void keyBoardcontrols()
+	{
+		if (GetKey(olc::S).bReleased)
+		{
+			makePng();
+		}
+
+	}
 	void controls(float fElapsedTime)
 	{
 		
 		placeTile();
 		selectTile();
+		keyBoardcontrols();
 	}
 	void updateSelectedTile()
 	{
@@ -829,8 +1022,9 @@ private:
 	bool OnUserUpdate(float fElapsedTime) override
 	{
 		updateSelectedTile();
-		controls(fElapsedTime);
+		
 		drawScreen(fElapsedTime);
+		controls(fElapsedTime);
 		return true;
 	}
 
