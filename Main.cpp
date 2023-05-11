@@ -29,6 +29,8 @@ public:
 	std::mt19937 mtEngine;
 	std::vector<std::unique_ptr<olc::Sprite>> spriteSheets;
 	std::vector<std::unique_ptr<olc::Decal>> vecS_Decals;
+	uint16_t m_cellTileGridSize = 3;
+	uint16_t m_resolution = 16;
 	struct Rect
 	{
 		olc::vf2d pos;
@@ -44,11 +46,11 @@ public:
 	};
 	struct Edge
 	{
-		uint16_t cornerA, side, cornerB;
+		int16_t cornerA, side, cornerB;
 	};
 	struct SpriteTile
 	{
-		uint16_t tiletype;
+		int16_t tiletype;
 		uint16_t tileNumber;
 		Edge north, east, south, west;
 	};
@@ -56,14 +58,14 @@ public:
 	{
 		bool flippedH = false;
 		bool flippedV = false;
-		uint16_t tiletype;
-		uint16_t tileNumber = -1;
+		int16_t tiletype = -1;
+		uint16_t tileNumber = 0;
 		Edge north, east, south, west;
 		Rect rect;
 		std::vector<SpriteTile> tilesAvailable;
 	};
 	std::vector<std::vector<SpriteTile>> AllBaseTiles;
-	void SetEdge(SpriteTile& t, int edgeToSet, uint16_t a, uint16_t s, uint16_t b)
+	void SetEdge(SpriteTile& t, int edgeToSet, int16_t a, int16_t s, int16_t b)
 	{
 		switch (edgeToSet)
 		{
@@ -162,6 +164,7 @@ public:
 	}
 	void CheckGridForCollapse(uint32_t gridX, uint32_t gridY, std::vector<std::vector<Tile>>& playboard)
 	{
+
 		std::vector<std::vector<Tile>> playboard_ = playboard;
 		Tile* t = nullptr;// = playboard_[0][0];
 		uint16_t lowestpossible = UINT16_MAX;
@@ -185,7 +188,7 @@ public:
 			}
 		}
 		//collapse t
-
+		if (t == nullptr) return;
 		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
 
 		t->tileNumber = t->tilesAvailable[dist(mtEngine)].tileNumber;
@@ -234,7 +237,7 @@ public:
 
 	void SetBuiltInEdges()
 	{
-		uint16_t type = 0;
+		int16_t type = 0;
 		uint16_t tileNum = 0;
 		for (int i = 0; i < vecS_Decals.size(); i++)
 		{
@@ -261,7 +264,7 @@ public:
 			
 			for (int j = 0; j < AllBaseTiles[i].size(); j++)
 			{
-				uint16_t eT = 0;
+				int16_t eT = 0;
 				switch (edgeType)
 				{
 				case 0:
@@ -372,6 +375,7 @@ private:
 		z = 6,
 	    
 	};
+
 	//struct Rect
 	//{
 	//	olc::vf2d pos;
@@ -382,6 +386,7 @@ private:
 	{
 		std::vector<std::string> blockStrings;
 		std::vector<std::vector<olc::vf2d>> blockPositions;
+		std::vector<std::vector<olc::vf2d>> drawBlockPositions;
 		olc::Pixel material;
 		olc::vf2d sizePerBlock;
 		olc::vf2d firstPos = {-1,-1};
@@ -402,7 +407,12 @@ private:
 
 			blockStrings.clear();
 			blockPositions.resize(4);
+			drawBlockPositions.resize(4);
 			for (auto i = blockPositions.begin(); i < blockPositions.end(); i++)
+			{
+				i->resize(4);
+			}
+			for (auto i = drawBlockPositions.begin(); i < drawBlockPositions.end(); i++)
 			{
 				i->resize(4);
 			}
@@ -462,13 +472,17 @@ private:
 				{
 					if (*c == '1')
 					{
-						olc::vf2d newVf2d = olc::vf2d( size.x * x,size.y * y );
+						olc::vf2d newVf2d = olc::vf2d(size.x * x, size.y * y);
+						olc::vf2d newDrawVf2d = olc::vf2d(10 * x, 10 * y);
 						blockPositions[y][x] = newVf2d;
+						drawBlockPositions[y][x] = newDrawVf2d;
 					}
 					else //give block position an invalid value
 					{
 						olc::vf2d negativePos = olc::vf2d{ -1.0,-1.0 };
+						olc::vf2d negativeDrawPos = olc::vf2d{ -1.0,-1.0 };
 						blockPositions[y][x] = negativePos;
+						drawBlockPositions[y][x] = negativeDrawPos;
 					}
 					x++;
 				}
@@ -482,6 +496,9 @@ private:
 				blockPositions[i].erase(std::remove_if(blockPositions[i].begin(), blockPositions[i].end(), [](const olc::vf2d& v) {
 					return v.x < 0 || v.y < 0;
 					}), blockPositions[i].end());
+				drawBlockPositions[i].erase(std::remove_if(drawBlockPositions[i].begin(), drawBlockPositions[i].end(), [](const olc::vf2d& v) {
+					return v.x < 0 || v.y < 0;
+					}), drawBlockPositions[i].end());
 			}
 			for (auto i = blockPositions.begin(); i < blockPositions.end(); i++)
 			{
@@ -508,6 +525,8 @@ private:
 	struct emptyCells
 	{
 		Rect cell;
+		bool empty = false;
+		std::vector<std::vector<Tile>> tilesInCell; //nullptr;
 		bool notempty = false;
 	};
 	struct PlayField
@@ -517,19 +536,39 @@ private:
 		std::vector<tetriminoes>tetrisTiles;
 		PlayField()
 		{
+		}
+		PlayField(uint16_t resolution, uint16_t cellTileGridSize)
+		{
 			int x = 0;
 			int y = 0;
-			playfieldCells.resize(60);
+			playfieldCells.resize(15);
 			for (int i = 0; i < playfieldCells.size(); i++)
 			{
-				playfieldCells[i].resize(40);
+				playfieldCells[i].resize(10);
 			}
 			for (auto i = playfieldCells.begin(); i < playfieldCells.end(); i++)
 			{
 				for (auto b = i->begin(); b < i->end(); b++)
 				{
-					b->cell.pos = olc::vf2d(0 + 10*x, 0 + 10*y);
-					b->cell.size = olc::vf2d(10, 10);
+					b->cell.pos = olc::vf2d(0 + (resolution * cellTileGridSize)*x, 0 + (resolution * cellTileGridSize )*y);
+					b->cell.size = olc::vf2d(resolution*cellTileGridSize, resolution * cellTileGridSize);
+					for (uint16_t j = 0; j < cellTileGridSize; j++)
+					{
+						std::vector<Tile> tilesToAdd;
+						for (uint16_t k = 0; k < cellTileGridSize; k++)
+						{
+							Tile t;
+							t.tiletype = -1;
+							olc::vf2d dPos, dSize;
+							dPos = b->cell.pos + olc::vf2d{ float(k * resolution),float(j * resolution) };
+							dSize.x = resolution;
+							dSize.y = resolution;
+							t.rect.pos = dPos;
+							t.rect.size = dSize;
+							tilesToAdd.push_back(t);
+						}
+						b->tilesInCell.push_back(tilesToAdd);
+					}
 					x++;
 					playFieldRect.size.x = b->cell.pos.x + 10;
 					playFieldRect.size.y = b->cell.pos.y + 10;
@@ -544,25 +583,44 @@ private:
 	PlayField playField;
 	std::vector<tetriminoes>tetrisTiles;
 	tetriminoes selectedTile;
-
+	void drawTiles(float fElapsedTime)
+	{
+		for (int cellY = 0; cellY < playField.playfieldCells.size(); cellY++)
+		{
+			for (int cellX = 0; cellX < playField.playfieldCells[cellY].size(); cellX++)
+			{
+				for (int y = 0; y < playField.playfieldCells[cellY][cellX].tilesInCell.size(); y++)
+				{
+					for (int x = 0; x < playField.playfieldCells[cellY][cellX].tilesInCell[y].size(); x++)
+					{
+						if (playField.playfieldCells[cellY][cellX].tilesInCell[y][x].tiletype == -1)
+						{
+							DrawRect(playField.playfieldCells[cellY][cellX].tilesInCell[y][x].rect.pos, 
+								playField.playfieldCells[cellY][cellX].tilesInCell[y][x].rect.size, olc::GREY);
+						}
+					}
+				}
+			}
+		}
+	}
 	void drawTetriminoes(float fElapsedTime)
 	{
 		
 		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
-			for (auto b	 = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
+			for (auto b	 = i->drawBlockPositions.begin(); b < i->drawBlockPositions.end(); b++)
 			{
 				for (auto c = b->begin(); c < b->end(); c++)
 				{
-					if (c->x != -1)//check if block position is valid
+					if (c->x != -1)//check if block position is validi->sizePerBlocki->sizePerBlock
 					{
 						if (i->selected == false)
 						{
-							FillRectDecal(*c + i->pallettePos, i->sizePerBlock);
+							FillRectDecal(*c + i->pallettePos, { 10,10 });
 						}
 						else
 						{
-							FillRectDecal(*c + i->pallettePos, i->sizePerBlock, olc::YELLOW);
+							FillRectDecal(*c + i->pallettePos, { 10,10 }, olc::YELLOW);
 						}
 					}
 				}
@@ -586,9 +644,9 @@ private:
 				
 				for (auto b = i->begin(); b <i->end(); b++)
 				{
-					if (selectedTile.unplacable ==false)
+					if (selectedTile.unplacable ==false)//
 					{
-						FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock);
+						FillRectDecal(olc::vf2d((GetMousePos().x + b->x)-selectedTile.sizePerBlock.x, (GetMousePos().y + b->y) - selectedTile.sizePerBlock.y), selectedTile.sizePerBlock);
 					}
 					else
 					{
@@ -620,6 +678,7 @@ private:
 	void drawScreen(float fElapsedTime)
 	{
 		drawPalletteField(fElapsedTime);
+		drawTiles(fElapsedTime);
 		drawPlayfield(fElapsedTime);
 		drawTetriminoes(fElapsedTime);
 	}
@@ -628,7 +687,7 @@ private:
 	{
 		for (int i = 0; i < 7; i++)
 		{
-			tetriminoes newtetristile(i, { 10,10 });
+			tetriminoes newtetristile(i, { float(m_resolution*m_cellTileGridSize),float(m_resolution * m_cellTileGridSize) });
 			pallette.pallettetetrisTiles.emplace_back(newtetristile);
 		}
 		float x = 0;
@@ -840,11 +899,11 @@ private:
 	{
 		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
-			for (auto b = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
+			for (auto b = i->drawBlockPositions.begin(); b < i->drawBlockPositions.end(); b++)
 			{
 				for (auto c = b->begin(); c < b->end(); c++)
 				{
-					if (CheckCollision(olc::vf2d(GetMousePos()), *c + i->pallettePos, { 50,50 }, i->sizePerBlock))
+					if (CheckCollision(olc::vf2d(GetMousePos()), *c + i->pallettePos, { 50,50 }, { 10,10 }))
 					{
 						i->selected = true;
 					}
@@ -1014,6 +1073,7 @@ private:
 		//std::random_device rd();
 		mtEngine.seed(1794);
 		InitializeSpritesDecals();
+		playField = PlayField(m_resolution, m_cellTileGridSize);
 		SetBuiltInEdges();
 		initPallette();
 		initTetriminoes();
