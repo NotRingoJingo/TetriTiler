@@ -65,6 +65,7 @@ public:
 		std::vector<SpriteTile> tilesAvailable;
 	};
 	std::vector<std::vector<SpriteTile>> AllBaseTiles;
+	int mapNum = 1;
 	void SetEdge(SpriteTile& t, int edgeToSet, int16_t a, int16_t s, int16_t b)
 	{
 		switch (edgeToSet)
@@ -762,10 +763,21 @@ private:
 		int width, height;
 		if (capture_window_to_bitmap(hWnd, x, y,w, h, image_data, width, height)) {
 			// Save the captured image to a PNG file
-			save_Png("captured_image.png", image_data, width, height, x, y, w, h);
+			const char* name = "map";
+			
+			std::stringstream ss;
+			ss << name << mapNum<<".png";
+			save_Png(ss.str().c_str(), image_data, width, height, x, y, w, h);
+			mapNum++;
 			//delete[] image_data;
 		}
-		
+		//+ std::to_string(mapNum)
+	}
+	std::string mapName()
+	{
+		std::string s;
+		s = "map" + mapNum;
+		return s;
 	}
 	bool capture_window_to_bitmap(HWND hWnd, int x, int y, int w, int h, BYTE*& image_data, int& width, int& height) {
 		// Get the window's device context
@@ -773,11 +785,15 @@ private:
 		HDC hdcWindow = GetDC(hWnd);
 
 		// Get the dimensions of the window
-		RECT rect;
+		/*RECT rect;*/
 		//GetClientRect(hWnd, &rect);
 		int window_width = w;
 		int window_height = h;
-
+		COLORREF color = GetPixel(hdcWindow, x, y);
+		BYTE blue = GetBValue(color);
+		
+		BYTE green = GetGValue(color);
+		BYTE red = GetRValue(color);
 		// Create a memory device context and a memory bitmap
 		HDC hdcMem = CreateCompatibleDC(hdcWindow);
 		HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, window_width, window_height);
@@ -795,10 +811,15 @@ private:
 
 			width = w;
 			height = h;
+			COLORREF color = GetPixel(hdcWindow, x, y);
+			BYTE blue = GetBValue(color);
+			BYTE green = GetGValue(color);
+			BYTE red = GetRValue(color);
 
 			// Allocate memory for the image data
 			image_data = new BYTE[w * h * 4]; // RGBA
 			std::cout << " " + *image_data;
+			
 			// Copy the image data from the bitmap to the image buffer
 			BITMAPINFO bmi = { 0 };
 			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -806,15 +827,23 @@ private:
 			bmi.bmiHeader.biHeight = -window_height; // negative height to indicate top-down bitmap
 			bmi.bmiHeader.biPlanes = 1;
 			bmi.bmiHeader.biBitCount = 32;
-			//bmi.bmiHeader.biCompression = BI_RGB;
+		//	bmi.bmiHeader.biCompression = BI_RGB;
 			HBITMAP hDIB = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (void**)&image_data, NULL, 0);
 			if (hDIB!=NULL)
 			{
-				int iBytes = (((width * 32) + 31) / 32) * 4 * height;
+				//unsigned char* pixel = image_data;
+				int iBytes = (((width *32) + 31) / 32) * 4 * height;
+				
 				bsuccess = GetBitmapBits(hBitmap, iBytes, image_data);
 				if (bsuccess)
 				{
-					
+					BYTE temp;
+					for (int i = 0; i < width * height * 4; i += 4)
+					{
+						temp = image_data[i];
+						image_data[i] = image_data[i + 2];
+						image_data[i + 2] = temp;
+					}
 				}
 			}
 			//GetDIBits(hdcMem, hBitmap, y, h, image_data, &bmi, DIB_RGB_COLORS);
