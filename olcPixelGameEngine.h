@@ -853,7 +853,7 @@ namespace olc
 		virtual void       ClearBuffer(olc::Pixel p, bool bDepth) = 0;
 		static olc::PixelGameEngine* ptrPGE;
 	};
-
+	HWND pubHand;
 	class Platform
 	{
 	public:
@@ -867,6 +867,8 @@ namespace olc
 		virtual olc::rcode SetWindowTitle(const std::string& s) = 0;
 		virtual olc::rcode StartSystemEventLoop() = 0;
 		virtual olc::rcode HandleSystemEvent() = 0;
+		virtual HWND GetHwnd() =0;
+		
 		static olc::PixelGameEngine* ptrPGE;
 	};
 
@@ -2481,7 +2483,7 @@ namespace olc
 		else
 			DrawLineDecal(vf2d{ (float)x, (float)y }, vf2d{ (float)x,(float)y }, p);
 	}
-
+	
 	void PixelGameEngine::DrawLineDecal(const olc::vf2d& pos1, const olc::vf2d& pos2, Pixel p)
 	{
 		DecalInstance di;
@@ -4378,9 +4380,9 @@ namespace olc
 	class Platform_Windows : public olc::Platform
 	{
 	private:
-		HWND olc_hWnd = nullptr;
+		
 		std::wstring wsAppName;
-
+		HWND olc_hWnd = nullptr;
 		std::wstring ConvertS2W(std::string s)
 		{
 #ifdef __MINGW32__
@@ -4398,21 +4400,28 @@ namespace olc
 		}
 
 	public:
+		HWND pubHWND;
 		virtual olc::rcode ApplicationStartUp() override { return olc::rcode::OK; }
 		virtual olc::rcode ApplicationCleanUp() override { return olc::rcode::OK; }
 		virtual olc::rcode ThreadStartUp() override { return olc::rcode::OK; }
-
+		/*virtual HWND getHwnd(HWND hand)override
+		{
+			 hand = olc_hWnd;
+			return hand;
+		}*/
 		virtual olc::rcode ThreadCleanUp() override
 		{
 			renderer->DestroyDevice();
 			PostMessage(olc_hWnd, WM_DESTROY, 0, 0);
 			return olc::OK;
 		}
-
+		virtual HWND GetHwnd() override { return olc_hWnd; }
+		
 		virtual olc::rcode CreateGraphics(bool bFullScreen, bool bEnableVSYNC, const olc::vi2d& vViewPos, const olc::vi2d& vViewSize) override
 		{
 			if (renderer->CreateDevice({ olc_hWnd }, bFullScreen, bEnableVSYNC) == olc::rcode::OK)
 			{
+				//pubHand = olc_hWnd;
 				renderer->UpdateViewport(vViewPos, vViewSize);
 				return olc::rcode::OK;
 			}
@@ -4462,7 +4471,7 @@ namespace olc
 
 			olc_hWnd = CreateWindowEx(dwExStyle, olcT("OLC_PIXEL_GAME_ENGINE"), olcT(""), dwStyle,
 				vTopLeft.x, vTopLeft.y, width, height, NULL, NULL, GetModuleHandle(nullptr), this);
-
+			pubHand = olc_hWnd;
 			// Create Keyboard Mapping
 			mapKeys[0x00] = Key::NONE;
 			mapKeys[0x41] = Key::A; mapKeys[0x42] = Key::B; mapKeys[0x43] = Key::C; mapKeys[0x44] = Key::D; mapKeys[0x45] = Key::E;
@@ -4516,6 +4525,7 @@ namespace olc
 #else
 			SetWindowText(olc_hWnd, s.c_str());
 #endif
+			//pubHand = olc_hWnd;
 			return olc::OK;
 		}
 
@@ -4560,9 +4570,11 @@ namespace olc
 			case WM_RBUTTONUP:	ptrPGE->olc_UpdateMouseState(1, false);                                 return 0;
 			case WM_MBUTTONDOWN:ptrPGE->olc_UpdateMouseState(2, true);                                  return 0;
 			case WM_MBUTTONUP:	ptrPGE->olc_UpdateMouseState(2, false);                                 return 0;
-			case WM_CLOSE:		ptrPGE->olc_Terminate();                                                return 0;
+			case WM_CLOSE:		ptrPGE->olc_Terminate(); 
+				return 0;
 			case WM_DESTROY:	PostQuitMessage(0); DestroyWindow(hWnd);								return 0;
 			}
+			pubHand = hWnd;
 			return DefWindowProc(hWnd, uMsg, wParam, lParam);
 		}
 	};
