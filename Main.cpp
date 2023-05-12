@@ -18,6 +18,8 @@ namespace fs = std::filesystem;
 std::unique_ptr<olc::Platform> thisPlatform(olc::platform.get());
 
 #define M_PI 3.14159265358979323846
+float sWidth;
+float sHeight;
 class Engine : public olc::PixelGameEngine
 {
 public:
@@ -42,6 +44,23 @@ public:
 		olc::vf2d pos;
 		olc::vf2d size;
 	};
+	enum buttontypes
+	{
+		save = 0,
+		explode = 1,
+		clear = 2,
+	};
+	struct buttons
+	{
+		Rect buttonBox;
+		olc::Pixel color = olc::GREY;
+		bool selected = false;
+		bool pressed = false;
+		std::string name;
+		int type;
+	};
+	
+	
 	struct SpriteSheet
 	{
 		std::unique_ptr<olc::Sprite> sheet;
@@ -74,6 +93,31 @@ public:
 		SpriteTile tileToDraw;
 		bool collapsed = false;
 		std::vector<SpriteTile> tilesAvailable;
+	};
+	struct gui
+	{
+		std::vector<buttons> guiButtons;
+		Rect guiRect;
+		olc::Pixel guiColor = olc::WHITE;
+		void guiInit()
+		{
+			guiRect.pos.x =  sWidth - 100;
+			guiRect.pos.y = 0;
+			guiRect.size.x = 148;
+			guiRect.size.y = sHeight - 152;
+			for (int i = 0; i < 3; i++)
+			{
+				buttons newButton;
+				newButton.buttonBox.pos.x = guiRect.pos.x + 10;
+				newButton.buttonBox.pos.y = guiRect.pos.y + 50 + 50 *i;
+				newButton.buttonBox.size = { 80,30 };
+				newButton.type = i;
+				guiButtons.emplace_back(newButton);
+			}
+			guiButtons[0].name = "Save";
+			guiButtons[1].name = "Explode";
+			guiButtons[2].name = "Clear";
+		}
 	};
 	std::vector<std::vector<SpriteTile>> AllBaseTiles;
 	int mapNum = 1;
@@ -898,6 +942,7 @@ private:
 			
 		}
 	};
+	gui Gui;
 	Pallete pallette;
 	PlayField playField;
 	std::vector<tetriminoes>tetrisTiles;
@@ -1030,9 +1075,35 @@ private:
 			}
 		}
 	}
-
+	void drawButtons(float fElapsedTime)
+	{
+		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+		{
+			if (i->selected==false&&i->pressed == false)
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, i->color);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+			else if (i->selected == true&&i->pressed == false)
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size,olc::YELLOW);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+			else
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, olc::RED);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+		}
+	}
+	void drawGuiRect()
+	{
+		FillRectDecal(Gui.guiRect.pos, Gui.guiRect.size, Gui.guiColor);
+	}
 	void drawScreen(float fElapsedTime)
 	{
+		drawGuiRect();
+		drawButtons(fElapsedTime);
 		drawPalletteField(fElapsedTime);
 		drawTiles(fElapsedTime);
 		drawPlayfield(fElapsedTime);
@@ -1582,12 +1653,53 @@ private:
 		}
 		m_BeginCollapse = true;
 	}
+	void mouseControls()
+	{
+		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+		{
+			if (CheckCollision(i->buttonBox.pos,olc::vf2d(GetMousePos().x-10,GetMousePos().y-10),i->buttonBox.size,{20,20}))
+			{
+				i->selected = true;
+			}
+			else
+			{
+				i->selected = false;
+			}
+		}
+		if (GetMouse(olc::Mouse::LEFT).bReleased)
+		{
+
+
+			for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+			{
+				if (i->selected == true)
+				{
+					switch (i->type)
+					{
+					case save:
+						makePng();
+						break;
+					case explode:
+
+						ExplodePlayfield(playField);
+						fastCollapse = true;
+						break;
+					case clear:
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}
+	}
 	void controls(float fElapsedTime)
 	{
 		
 		selectTile();
 		placeTile();
-		keyBoardcontrols();
+		mouseControls();
+		//keyBoardcontrols();
 	}
 	void keyBoardcontrols()
 	{
@@ -1622,6 +1734,7 @@ private:
 			}
 		}
 	}
+	
 	bool OnUserCreate() override
 	{
 		//std::random_device rd();
@@ -1631,6 +1744,7 @@ private:
 		playField = PlayField(m_resolution, m_cellTileGridSize);
 		initPallette();
 		initTetriminoes();
+		Gui.guiInit();
 		return true;
 	}
 	bool OnUserUpdate(float fElapsedTime) override
@@ -1655,7 +1769,8 @@ int main()
 	Engine Game;
 	if (Game.Construct(1200, 900, 1, 1))
 	{
-	
+		sWidth = Game.ScreenWidth();
+		sHeight = Game.ScreenHeight();
 
 		Game.Start();
 	}
