@@ -121,6 +121,7 @@ public:
 	}
 	void CompareTiles(Tile& a, Tile& b,int edgeToCompare)
 	{
+		if (b.tiletype < 1) return;
 		for (uint16_t i = 0; i < a.tilesAvailable.size(); i++)
 		{
 			Edge aEdgeTranslated = a.tilesAvailable[i].north;
@@ -671,11 +672,6 @@ public:
 				else m_collapseTileTimer = c_collapseTileTimer;
 				m_BeginCollapse = BeginColapse(playField, fElapsedTime);
 			}
-		}
-		if (GetKey(olc::E).bReleased)
-		{
-			ExplodePlayfield(playField);
-			fastCollapse = true;
 		}
 	
 	}
@@ -1331,7 +1327,7 @@ private:
 
 		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
 		uint16_t tA = 0;
-		if (t->tilesAvailable.size() > 0) tA = dist(mtEngine);
+		tA = dist(mtEngine);
 		t->tileToDraw = t->tilesAvailable[tA];
 		t->tileNumber = t->tilesAvailable[tA].tileNumber;
 		t->tiletype = t->tilesAvailable[tA].tiletype;
@@ -1438,7 +1434,7 @@ private:
 				olc::vf2d posToCheck = nearestCell(GetMousePos()) + *t;
 				if (posToCheck.x + selectedTile.sizePerBlock.x > playField.playfieldCells[0].size() * m_cellTileGridSize * m_resolution || posToCheck.y + selectedTile.sizePerBlock.y > playField.playfieldCells.size() * m_cellTileGridSize * m_resolution || GetMousePos().x < 0 || GetMousePos().y < 0)
 				{
-					return true;
+					selectedTile.unplacable = true;
 				}
 			}
 		}
@@ -1563,6 +1559,18 @@ private:
 		selectTile();
 		placeTile();
 		keyBoardcontrols();
+	}
+	void keyBoardcontrols()
+	{
+		if (GetKey(olc::S).bReleased)
+		{
+			makePng();
+		}
+		if (GetKey(olc::E).bReleased)
+		{
+			ExplodePlayfield(playField);
+			fastCollapse = true;
+		}
 	}
 	void updateMouse()
 	{
