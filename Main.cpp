@@ -31,6 +31,12 @@ public:
 	std::vector<std::unique_ptr<olc::Decal>> vecS_Decals;
 	uint16_t m_cellTileGridSize = 3;
 	uint16_t m_resolution = 16;
+	const float c_collapseTileTimer = .1f;
+	float m_collapseTileTimer = c_collapseTileTimer;
+	bool fastCollapse = false;
+	const float c_fastCollapseTileTimer = .001f;
+	bool m_BeginCollapse = false;
+	int fuckupcount = 0;
 	struct Rect
 	{
 		olc::vf2d pos;
@@ -44,15 +50,18 @@ public:
 		uint16_t tilecount;
 		uint16_t tiletype;
 	};
+	std::vector<SpriteSheet> SpriteSheets_Vec;
 	struct Edge
 	{
-		int16_t cornerA, side, cornerB;
+		int16_t cornerA = -1, side = -1 , cornerB = -1;
 	};
 	struct SpriteTile
 	{
 		int16_t tiletype;
 		uint16_t tileNumber;
 		Edge north, east, south, west;
+		olc::vf2d sourcpos = { 0,16 };
+		uint16_t SheetNumber = 0;
 	};
 	struct Tile
 	{
@@ -62,6 +71,8 @@ public:
 		uint16_t tileNumber = 0;
 		Edge north, east, south, west;
 		Rect rect;
+		SpriteTile tileToDraw;
+		bool collapsed = false;
 		std::vector<SpriteTile> tilesAvailable;
 	};
 	std::vector<std::vector<SpriteTile>> AllBaseTiles;
@@ -88,16 +99,34 @@ public:
 	{
 		return { e.cornerB,e.side,e.cornerA };
 	}
+	void RemoveEmptyTiles(Tile& tile)
+	{
+		for (int i = 0; i < tile.tilesAvailable.size(); i++)
+		{
+			/*if (CompareAllEdges(tile, Edge{ -2,-2,-2 }))
+			{
+				tile.tilesAvailable.erase(tile.tilesAvailable.begin() + i);
+				i--;
+			}*/
+			if (CompareAllEdges(tile, Edge{ -1,-1,-1 }))
+			{
+				tile.tilesAvailable.erase(tile.tilesAvailable.begin() + i);
+				i--;
+			}
+		}
+	}
+	bool CompareAllEdges(Tile t,Edge eToCompare)
+	{
+		if (EdgeComparison(t.north, eToCompare) && EdgeComparison(t.east, eToCompare) && EdgeComparison(t.south, eToCompare) && EdgeComparison(t.west, eToCompare)) return true;
+		return false;
+	}
 	void CompareTiles(Tile& a, Tile& b,int edgeToCompare)
 	{
-		if (b.tiletype < 0)
-		{
-			return;
-		}
+		if (b.tiletype < 1) return;
 		for (uint16_t i = 0; i < a.tilesAvailable.size(); i++)
 		{
-			Edge bEdgeTranslated = a.tilesAvailable[i].north;
-			Edge aEdgeTranslated = b.south;
+			Edge aEdgeTranslated = a.tilesAvailable[i].north;
+			Edge bEdgeTranslated = b.south;
 			switch (edgeToCompare)
 			{
 			case 0:
@@ -133,75 +162,49 @@ public:
 				if (a.flippedV) aEdgeTranslated = InvertEdge(aEdgeTranslated);
 				break;
 			}
-			if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
+			if (b.tiletype >= 0 && bEdgeTranslated.cornerA == -1 && bEdgeTranslated.cornerB == -1 && bEdgeTranslated.side == -1&&!b.collapsed)
 			{
-				a.tilesAvailable.erase(a.tilesAvailable.begin() + 1);
+				//bEdgeTranslated = { b.tiletype,b.tiletype,b.tiletype };
+				if (!EdgeComparisonBeforeCollapse(aEdgeTranslated, bEdgeTranslated, b.tiletype))
+				{
+					a.tilesAvailable.erase(a.tilesAvailable.begin() + i);
+					//a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), i), a.tilesAvailable.end());
+					i--;
+				}
+			}
+			else if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
+			{
+				a.tilesAvailable.erase(a.tilesAvailable.begin() + i);
 				//a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), i), a.tilesAvailable.end());
 				i--;
 			}
 		}
+		if (a.tilesAvailable.size()<1)
+		{
+			a.tilesAvailable.push_back(AllBaseTiles[a.tiletype][12]);
+			fuckupcount++;
+			std::cout << fuckupcount << std::endl;
+		}
+	}
+	bool EdgeComparisonBeforeCollapse(Edge a, Edge b,int16_t typeofTile)
+	{
+		if (a.cornerA == b.cornerA || a.cornerA == typeofTile)
+		{
+			if (a.side == b.side || a.side == typeofTile)
+			{
+				if (a.cornerB == b.cornerB || a.cornerB == typeofTile)
+				{
+					return true;
+				}
+			}
+		}
+		return false;
 	}
 	bool EdgeComparison(Edge a, Edge b)
 	{
 		if (a.cornerA == b.cornerA&& a.side == b.side && a.cornerB == b.cornerB) return true;
 		return false;
 	}
-	bool BeginColapse(uint32_t gridX, uint32_t gridY, std::vector<std::vector<Tile>>& playboard, float fElapsedTime)
-	{
-		bool check = false;
-		for (uint32_t y = 0; y < gridY; y++)
-		{
-			for (uint32_t x = 0; x < gridX; x++)
-			{
-				if (playboard[y][x].tiletype >= 0 && playboard[y][x].tileNumber == -1)
-				{
-					check = true;
-				}
-			}
-		}
-		if (!check) return check;
-		CheckGridForCollapse(gridX, gridY, playboard);
-		return check;
-	}
-	void CheckGridForCollapse(uint32_t gridX, uint32_t gridY, std::vector<std::vector<Tile>>& playboard)
-	{
-
-		std::vector<std::vector<Tile>> playboard_ = playboard;
-		Tile* t = nullptr;// = playboard_[0][0];
-		uint16_t lowestpossible = UINT16_MAX;
-		for (uint32_t y = 0; y < gridY; y++)
-		{
-			for (uint32_t x = 0; x < gridX; x++)
-			{
-				if (playboard_[y][x].tiletype >= 0)
-				{
-					if (x > 0) CompareTiles(playboard_[y][x], playboard_[y][x - 1], 3);
-					if (y > 0) CompareTiles(playboard_[y][x], playboard_[y-1][x], 0);
-					if (x < gridX-1) CompareTiles(playboard_[y][x], playboard_[y][x + 1], 1);
-					if (y < gridY-1) CompareTiles(playboard_[y][x], playboard_[y+1][x], 2);
-					if (t == nullptr)t = &playboard_[y][x];
-					if (playboard_[y][x].tilesAvailable.size() < lowestpossible)
-					{
-						lowestpossible = playboard_[y][x].tilesAvailable.size();
-						t = &playboard_[y][x];
-					}
-				}
-			}
-		}
-		//collapse t
-		if (t == nullptr) return;
-		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
-
-		t->tileNumber = t->tilesAvailable[dist(mtEngine)].tileNumber;
-		t->east = AllBaseTiles[t->tiletype][t->tileNumber].east;
-		t->north = AllBaseTiles[t->tiletype][t->tileNumber].north;
-		t->west = AllBaseTiles[t->tiletype][t->tileNumber].west;
-		t->south = AllBaseTiles[t->tiletype][t->tileNumber].south;
-
-		//add puff animation and screen shake
-		playboard = playboard_;
-	}
-
 	void InitializeSpritesDecals()
 	{
 		std::string path = "./assets";
@@ -225,13 +228,20 @@ public:
 			}
 			if (tokenPass)
 			{
-				spriteSheets.push_back(std::make_unique<olc::Sprite>("./assets/" + fileNames[i].filename().string()));
+				SpriteSheet s = { std::make_unique<olc::Sprite>("./assets/" + fileNames[i].filename().string()) };
+				SpriteSheets_Vec.push_back(std::move(s));
+
+				//spriteSheets.push_back(std::make_unique<olc::Sprite>("./assets/" + fileNames[i].filename().string()));
 				//std::cout << fileNames[i].filename().string() << std::endl;
 			}
 		}
-		for (int i = 0; i < spriteSheets.size(); i++)
+		for (int i = 0; i < SpriteSheets_Vec.size(); i++)
 		{
-			vecS_Decals.push_back(std::make_unique<olc::Decal>(spriteSheets[i].get()));
+			SpriteSheets_Vec[i].sheetDecal = std::make_unique<olc::Decal>(SpriteSheets_Vec[i].sheet.get());
+			SpriteSheets_Vec[i].tiletype = i;
+			SpriteSheets_Vec[i].tilecount = 9;
+			SpriteSheets_Vec[i].resolution = m_resolution;
+			//vecS_Decals.push_back();
 			//std::cout << vecS_Decals[i].get()->sprite->height << std::endl;
 		}
 	}
@@ -240,29 +250,39 @@ public:
 	{
 		int16_t type = 0;
 		uint16_t tileNum = 0;
-		for (int i = 0; i < vecS_Decals.size(); i++)
+		uint16_t div = 6;
+		std::vector<SpriteTile> st;
+		for (int i = 0; i < SpriteSheets_Vec.size(); i++)
 		{
-			std::vector<SpriteTile> st;
-			for (int y = 0; y < 3; y++)
+			//TODO add all cells
+			for (int y = 0; y < 5; y++)
 			{
-				for (int x = 0; x < 3; x++)
+				for (int x = 0; x < 11; x++)
 				{
-					st.push_back(SpriteTile{ type,tileNum });
+					SpriteTile sp;
+					sp.tileNumber = tileNum;
+					sp.tiletype = type;
+					sp.sourcpos = {(float) x * m_resolution,(float)y * m_resolution };
+					sp.SheetNumber = i;
+					st.push_back(sp);
 					tileNum++;
 				}
 			}
-			if (i + 1 % 7)
+			if (i==div)
 			{
 				type += 1;
+				if (type == 7) type = -1;
 				tileNum = 0;
+				div += 7;
 				AllBaseTiles.push_back(st);
+				st.clear();
 			}
 		}
 		int spriteTileLoop = 0;
-		int edgeType = 0;
 		for (int i = 0; i < AllBaseTiles.size(); i++)
 		{
 			
+		int edgeType = 0;
 			for (int j = 0; j < AllBaseTiles[i].size(); j++)
 			{
 				int16_t eT = 0;
@@ -295,73 +315,366 @@ public:
 				default:
 					break;
 				}
+				//re number the case switch to inculde all cells and update the edges
+				//add the sprites to the sprite sheets and include them in this
 				switch (spriteTileLoop)
 				{
 				case 0:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 1:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 2:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 3:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 4:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 5:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 6:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 7:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 8:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 9:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 10:
+					AllBaseTiles[i][j].north = {-2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 11:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 12:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
-				case 6:
+				case 13:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 14:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 15:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 16:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 17:
 					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 18:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 19:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 20:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = {AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = {AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT};
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype};
+					break;
+				case 21:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 22:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
-				case 7:
+				case 23:
 					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
 					break;
-				case 8:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+				case 24:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 25:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 26:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 27:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 28:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 29:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 30:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 31:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 32:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 33:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 34:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 35:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 36:
+					AllBaseTiles[i][j].north = { eT,eT,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 37:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 38:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 39:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = {AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = {   eT,AllBaseTiles[i][j].tiletype,eT};
+					break;
+				case 40:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 41:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,eT,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 42:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 43:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 44:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 45:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 46:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 47:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 48:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,eT,eT };
+					break;
+				case 49:
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					break;
+				case 50:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 51:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,eT,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 52:
+					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,eT };
+					break;
+				case 53:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
+					break;
+				case 54:
+					AllBaseTiles[i][j].north = { -2,-2,-2 };
+					AllBaseTiles[i][j].east = { -2,-2,-2 };
+					AllBaseTiles[i][j].south = { -2,-2,-2 };
+					AllBaseTiles[i][j].west = { -2,-2,-2 };
 					break;
 				default:
 					break;
 				}
+				//update sprite loop to the new total
 				spriteTileLoop++;
-				if (spriteTileLoop >= 9)
+				if (spriteTileLoop >= 55)
 				{
 					spriteTileLoop = 0;
 					edgeType++;
 				}
 			}
 		}
+	}
+	void UpdatePlayfield(float fElapsedTime)
+	{
+		if (m_BeginCollapse)
+		{
+			m_collapseTileTimer -= fElapsedTime;
+			if (m_collapseTileTimer <= 0)
+			{
+				if (fastCollapse) m_collapseTileTimer = c_fastCollapseTileTimer;
+				else m_collapseTileTimer = c_collapseTileTimer;
+				m_BeginCollapse = BeginColapse(playField, fElapsedTime);
+			}
+		}
+	
 	}
 	HWND pubHwnd = olc::pubHand;
 private:
@@ -441,9 +754,9 @@ private:
 				blockStrings.push_back("0000");
 				break;
 			case j:
-				blockStrings.push_back("0001");
-				blockStrings.push_back("0001");
-				blockStrings.push_back("0011");
+				blockStrings.push_back("0100");
+				blockStrings.push_back("0100");
+				blockStrings.push_back("1100");
 				blockStrings.push_back("0000");
 				break;
 			case l:
@@ -560,12 +873,17 @@ private:
 						{
 							Tile t;
 							t.tiletype = -1;
+							t.east = { -1,-1,-1 };
+							t.west = { -1,-1,-1 };
+							t.north = { -1,-1,-1 };
+							t.south = { -1,-1,-1 };
 							olc::vf2d dPos, dSize;
 							dPos = b->cell.pos + olc::vf2d{ float(k * resolution),float(j * resolution) };
 							dSize.x = resolution;
 							dSize.y = resolution;
 							t.rect.pos = dPos;
 							t.rect.size = dSize;
+
 							tilesToAdd.push_back(t);
 						}
 						b->tilesInCell.push_back(tilesToAdd);
@@ -628,35 +946,43 @@ private:
 			
 			}
 		}
-		for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
+		if (m_BeginCollapse)
 		{
-			for (auto x = i->blockPositions.begin(); x <i->blockPositions.end(); x++)
+			for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
 			{
-				for (auto c = x->begin(); c < x->end(); c++)
+				for (auto x = i->blockPositions.begin(); x < i->blockPositions.end(); x++)
 				{
-					FillRectDecal(i->placedPos + *c, i->sizePerBlock);
-				}
-			}	
-		}
-		if (selectedTile.tileType!=8)
-		{
-			for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
-			{
-				
-				for (auto b = i->begin(); b <i->end(); b++)
-				{
-					if (selectedTile.unplacable ==false)//
+					for (auto c = x->begin(); c < x->end(); c++)
 					{
-						FillRectDecal(olc::vf2d((GetMousePos().x + b->x)-selectedTile.sizePerBlock.x, (GetMousePos().y + b->y) - selectedTile.sizePerBlock.y), selectedTile.sizePerBlock);
-					}
-					else
-					{
-						FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock, olc::RED);
+						FillRectDecal(i->placedPos + *c, i->sizePerBlock);
 					}
 				}
 			}
 		}
-		
+		else
+		{
+			if (selectedTile.tileType != 8)
+			{
+				for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+				{
+
+					for (auto b = i->begin(); b < i->end(); b++)
+					{
+						olc::Pixel col = olc::WHITE;
+						if (selectedTile.unplacable)//
+						{
+							col = olc::RED;
+							//FillRectDecal(olc::vf2d((GetMousePos().x + b->x)-selectedTile.sizePerBlock.x, (GetMousePos().y + b->y) - selectedTile.sizePerBlock.y), selectedTile.sizePerBlock);
+						}
+						//else
+						//{
+						//	//FillRectDecal(olc::vf2d(GetMousePos().x + b->x, GetMousePos().y + b->y), selectedTile.sizePerBlock, olc::RED); - selectedTile.sizePerBlock.x*2 - selectedTile.sizePerBlock.y*2
+						//}
+						FillRectDecal(olc::vf2d((GetMousePos().x + b->x), (GetMousePos().y + b->y)), selectedTile.sizePerBlock, col);
+					}
+				}
+			}
+		}
 	}
 	void drawPlayfield(float fElapsedTime)
 	{
@@ -676,12 +1002,42 @@ private:
 	{
 		FillRectDecal(pallette.palleteRect.pos, pallette.palleteRect.size, olc::Pixel(200, 200, 200, 200));
 	}
+
+	void drawCollapsedTiles(float fElapsedTime)
+	{
+		for (int cellY = 0; cellY < playField.playfieldCells.size(); cellY++)
+		{
+			for (int cellX = 0; cellX < playField.playfieldCells[cellY].size(); cellX++)
+			{
+				for (int y = 0; y < playField.playfieldCells[cellY][cellX].tilesInCell.size(); y++)
+				{
+					for (int x = 0; x < playField.playfieldCells[cellY][cellX].tilesInCell[y].size(); x++)
+					{
+						if (!playField.playfieldCells[cellY][cellX].tilesInCell[y][x].collapsed)
+						{
+						}
+						else
+						{
+							int16_t ttype = playField.playfieldCells[cellY][cellX].tilesInCell[y][x].tiletype;
+							if (ttype == -1) ttype = 7;
+							DrawPartialDecal(playField.playfieldCells[cellY][cellX].tilesInCell[y][x].rect.pos, playField.playfieldCells[cellY][cellX].tilesInCell[y][x].rect.size,
+								SpriteSheets_Vec[playField.playfieldCells[cellY][cellX].tilesInCell[y][x].tileToDraw.SheetNumber].sheetDecal.get(),
+								AllBaseTiles[ttype][playField.playfieldCells[cellY][cellX].tilesInCell[y][x].tileNumber].sourcpos,
+								olc::vf2d{ (float)m_resolution,(float)m_resolution });
+						}
+					}
+				}
+			}
+		}
+	}
+
 	void drawScreen(float fElapsedTime)
 	{
 		drawPalletteField(fElapsedTime);
 		drawTiles(fElapsedTime);
 		drawPlayfield(fElapsedTime);
 		drawTetriminoes(fElapsedTime);
+		drawCollapsedTiles(fElapsedTime);
 	}
 	
 	void initTetriminoes()
@@ -924,8 +1280,101 @@ private:
 		}
 		return false;
 	}
+
+	bool BeginColapse(PlayField& playboard, float fElapsedTime)
+	{
+		for (uint32_t celly = 0; celly < playboard.playfieldCells.size(); celly++)
+		{
+			for (uint32_t cellx = 0; cellx < playboard.playfieldCells[celly].size(); cellx++)
+			{
+				for (uint32_t y = 0; y < playboard.playfieldCells[celly][cellx].tilesInCell.size(); y++)
+				{
+					for (uint32_t x = 0; x < playboard.playfieldCells[celly][cellx].tilesInCell[y].size(); x++)
+					{
+// && playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tileNumber == -1
+						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype >= 0&& !playboard.playfieldCells[celly][cellx].tilesInCell[y][x].collapsed)
+						{
+							CheckGridForCollapse(playboard);
+							return true;
+						}
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	void CheckGridForCollapse(PlayField& playboard)
+	{
+		//std::vector<std::vector<Tile>> playboard_ = playboard;
+		Tile* t = nullptr;// = playboard_[0][0];
+		uint16_t lowestpossible = UINT16_MAX;
+		for (uint32_t celly = 0; celly < playboard.playfieldCells.size(); celly++)
+		{
+			for (uint32_t cellx = 0; cellx < playboard.playfieldCells[celly].size(); cellx++)
+			{
+				for (uint32_t y = 0; y < playboard.playfieldCells[celly][cellx].tilesInCell.size(); y++)
+				{
+					for (uint32_t x = 0; x < playboard.playfieldCells[celly][cellx].tilesInCell[y].size(); x++)
+					{
+						//TODO
+						//pick the next tile and the surrounding tiles, compare after this loop so each tile does a comparison one time
+						//remove this todo segment once done
+						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype < 0) continue;
+						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].collapsed) continue;
+						if (x > 0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y][x - 1], 3);
+						else if(cellx>0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx-1].tilesInCell[y][m_cellTileGridSize-1], 3);
+						if (y > 0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y - 1][x], 0);
+						else if (celly > 0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly-1][cellx].tilesInCell[m_cellTileGridSize-1][x], 0);
+						if (x < m_cellTileGridSize - 1) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y][x + 1], 1);
+						else if (cellx < playboard.playfieldCells[celly].size()-1) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx + 1].tilesInCell[y][0], 1);
+						if (y < m_cellTileGridSize - 1) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y + 1][x], 2);
+						else if (celly < playboard.playfieldCells.size()-1) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly+1][cellx].tilesInCell[0][x], 2);
+						if (t == nullptr)t = &playboard.playfieldCells[celly][cellx].tilesInCell[y][x];
+						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.size() < lowestpossible)
+						{
+							lowestpossible = playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.size();
+							t = &playboard.playfieldCells[celly][cellx].tilesInCell[y][x];
+						}
+
+					}
+				}
+			}
+		}
+		/*for (uint32_t y = 0; y < gridY; y++)
+		{
+			for (uint32_t x = 0; x < gridX; x++)
+			{
+				if (playboard_[y][x].tiletype >= 0)
+				{
+					
+				}
+			}
+		}*/
+		//collapse t
+		if (t == nullptr) return;
+
+		std::uniform_int_distribution<uint16_t> dist(0, t->tilesAvailable.size() - 1);
+		uint16_t tA = 0;
+		tA = dist(mtEngine);
+		t->tileToDraw = t->tilesAvailable[tA];
+		t->tileNumber = t->tilesAvailable[tA].tileNumber;
+		t->tiletype = t->tilesAvailable[tA].tiletype;
+		int16_t ttype = t->tiletype;
+		if (ttype == -1) ttype = 7;
+		t->east = AllBaseTiles[ttype][t->tileNumber].east;
+		t->north = AllBaseTiles[ttype][t->tileNumber].north;
+		t->west = AllBaseTiles[ttype][t->tileNumber].west;
+		t->south = AllBaseTiles[ttype][t->tileNumber].south;
+		t->collapsed = true;
+
+		//add puff animation and screen shake
+		//playboard = playboard_;
+	}
+
 	void selectTile()
 	{
+		if (m_BeginCollapse)return;
 		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
 			for (auto b = i->drawBlockPositions.begin(); b < i->drawBlockPositions.end(); b++)
@@ -956,7 +1405,7 @@ private:
 			}
 		}
 	}
-	olc::vf2d nearestCell()
+	olc::vf2d nearestCell(olc::vf2d posToCheck)
 	{
 		//need to have a start pos and end pos added to struct for finding cells and divide mouse pos by block size
 		/*olc::vf2d maxXvec = { 0,0 };
@@ -971,22 +1420,17 @@ private:
 			}
 		}*/
 		
-		olc::vf2d nearest_vec = playField.playfieldCells[0][0].cell.pos; // Start with the first vec2
-		float min_distance = distance(selectedTile.firstPos+GetMousePos(), nearest_vec);
+		olc::vf2d nearest_vec = playField.playfieldCells[0][0].cell.pos; // Start with the first vec2selectedTile.firstPosselectedTile.firstPos
+		float min_distance = distance(posToCheck, nearest_vec);
 		for (auto i = playField.playfieldCells.begin(); i < playField.playfieldCells.end(); i++)
 		{
 			for (auto c = i->begin(); c < i->end(); c++)
 			{
-				if (c->notempty == false)
-				{
-					float d = distance(selectedTile.firstPos+GetMousePos(), c->cell.pos);
-					if (d < min_distance) {
-						min_distance = d;
-						nearest_vec = c->cell.pos;
-					}
+				float d = distance(posToCheck, c->cell.pos);
+				if (d < min_distance) {
+					min_distance = d;
+					nearest_vec = c->cell.pos;
 				}
-				
-				
 			}
 		}
 		return nearest_vec;
@@ -994,82 +1438,156 @@ private:
 	float distance(const olc::vf2d& a, const olc::vf2d& b) {
 		return std::sqrt(std::pow(b.x - a.x, 2) + std::pow(b.y - a.y, 2));
 	}
-	bool isUnplacable()
-	{
-		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+
+	void placeTile()
+	{// { 50,50 }
+		if (m_BeginCollapse)return;
+		selectedTile.unplacable = false;
+		for (auto s = selectedTile.blockPositions.begin(); s < selectedTile.blockPositions.end(); s++)
 		{
-			for (auto b = i->begin(); b < i->end(); b++)
+			for (auto t = s->begin(); t < s->end(); t++)
 			{
-				for (auto p = playField.tetrisTiles.begin(); p < playField.tetrisTiles.end(); p++)
+				for (auto i = playField.tetrisTiles.begin(); i < playField.tetrisTiles.end(); i++)
 				{
-					for (auto c = p->blockPositions.begin(); c < p->blockPositions.end(); c++)
+					for (auto b = i->blockPositions.begin(); b < i->blockPositions.end(); b++)
 					{
-						for (auto d = c->begin(); d < c->end(); d++)
+						for (auto j = b->begin(); j < b->end(); j++)
 						{
-
-
-							if (CheckCollision(*b + GetMousePos(), *d+p->placedPos, selectedTile.sizePerBlock, p->sizePerBlock))
+							if (CheckCollision(olc::vf2d(nearestCell(GetMousePos())) + *t, *j + i->placedPos, i->sizePerBlock, i->sizePerBlock))
 							{
-								return true;
+								selectedTile.unplacable = true;
 							}
 						}
 					}
-						
-					
 				}
-			}
-		}
-		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
-		{
-			for (auto b = i->begin(); b < i->end(); b++)
-			{
-				if (CheckCollision(olc::vf2d(GetMousePos()) + *b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
+				olc::vf2d posToCheck = nearestCell(GetMousePos()) + *t;
+				if (posToCheck.x + selectedTile.sizePerBlock.x > playField.playfieldCells[0].size() * m_cellTileGridSize * m_resolution || posToCheck.y + selectedTile.sizePerBlock.y > playField.playfieldCells.size() * m_cellTileGridSize * m_resolution || GetMousePos().x < 0 || GetMousePos().y < 0)
 				{
-					return true;
+					selectedTile.unplacable = true;
 				}
-				
 			}
 		}
-		return false;
-	}
-	void placeTile()
-	{
-		
-		
-		
+		//for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+		//{
+		//	for (auto b = i->begin(); b < i->end(); b++)
+		//	{
+		//		if (CheckCollision(olc::vf2d(GetMousePos())+*b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
+		//		{
+		//			selectedTile.unplacable = true;
+		//		}
+		//	/*	else
+		//		{
+		//			selectedTile.unplacable = false;
+		//		}*/
+		//	}
+		//}
+		if (selectedTile.unplacable == true)
+		{
+			bool breakthis = true;
+		}
 		if (GetKey(olc::SPACE).bReleased)
 		{
  			bool breaker = true;
 		}
-		if (selectedTile.unplacable == false)
+		if (GetMouse(olc::Mouse::LEFT).bReleased)
 		{
-			if (GetMouse(olc::Mouse::LEFT).bReleased)
+			if (selectedTile.unplacable == false)
 			{
-				olc::vf2d celltoplace = nearestCell();
+				olc::vf2d celltoplace = nearestCell(GetMousePos());
 				selectedTile.placedPos = olc::vf2d(celltoplace);
 				playField.tetrisTiles.emplace_back(selectedTile);
-				for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+				setCellTypes(playField);
+				m_BeginCollapse = true;
+			}
+		}
+	}
+
+	void setCellTypes(PlayField& playfield_)
+	{
+		for (int tet = 0; tet < playfield_.tetrisTiles.size(); tet++)
+		{
+			for (int blockY = 0; blockY < playfield_.tetrisTiles[tet].blockPositions.size(); blockY++)
+			{
+				for (int blockX = 0; blockX < playfield_.tetrisTiles[tet].blockPositions[blockY].size(); blockX++)
 				{
-					for (auto b = i->begin(); b < i->end(); b++)
+					for (int y = 0; y < playfield_.playfieldCells.size(); y++)
 					{
-						for (auto start =playField.playfieldCells.begin(); start < playField.playfieldCells.end(); start++)
+						for (int x = 0; x < playfield_.playfieldCells[y].size(); x++)
 						{
-							for (auto c = start->begin(); c < start->end(); c++)
+							if (CheckCollision(playfield_.tetrisTiles[tet].blockPositions[blockY][blockX]+ playfield_.tetrisTiles[tet].placedPos, playfield_.playfieldCells[y][x].cell.pos,
+								playfield_.tetrisTiles[tet].sizePerBlock, playfield_.playfieldCells[y][x].cell.size))
 							{
-								if (*b+selectedTile.placedPos == c->cell.pos)
+								for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
 								{
-									c->notempty = false;
+									for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
+									{
+										if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
+										{
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = selectedTile.tileType;
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
+											for (int i = 0; i < AllBaseTiles[7].size(); i++)
+											{
+												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+											}
+											RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+										}
+									}
 								}
 							}
 						}
 					}
 				}
 			}
-
-
 		}
-			
+	}
+	void ExplodePlayfield(PlayField& playfield_)
+	{
+		for (int tet = 0; tet < playfield_.tetrisTiles.size(); tet++)
+		{
+			for (int blockY = 0; blockY < playfield_.tetrisTiles[tet].blockPositions.size(); blockY++)
+			{
+				for (int blockX = 0; blockX < playfield_.tetrisTiles[tet].blockPositions[blockY].size(); blockX++)
+				{
+					for (int y = 0; y < playfield_.playfieldCells.size(); y++)
+					{
+						for (int x = 0; x < playfield_.playfieldCells[y].size(); x++)
+						{
+							if (!CheckCollision(playfield_.tetrisTiles[tet].blockPositions[blockY][blockX] + playfield_.tetrisTiles[tet].placedPos, playfield_.playfieldCells[y][x].cell.pos,
+								playfield_.tetrisTiles[tet].sizePerBlock, playfield_.playfieldCells[y][x].cell.size))
+							{
+								std::uniform_int_distribution<uint16_t> dist(0, 6);
+								int16_t tempType = dist(mtEngine);
+								for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
+								{
+									for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
+									{
+										if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
+										{
+
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType;
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
+											for (int i = 0; i < AllBaseTiles[7].size(); i++)
+											{
+												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+											}
+											RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		m_BeginCollapse = true;
+	}
+	void controls(float fElapsedTime)
+	{
 		
+		selectTile();
+		placeTile();
+		keyBoardcontrols();
 	}
 	void keyBoardcontrols()
 	{
@@ -1077,14 +1595,22 @@ private:
 		{
 			makePng();
 		}
-
+		if (GetKey(olc::E).bReleased)
+		{
+			ExplodePlayfield(playField);
+			fastCollapse = true;
+		}
 	}
-	void controls(float fElapsedTime)
+	void updateMouse()
 	{
-		
-		placeTile();
-		selectTile();
-		keyBoardcontrols();
+		//if (GetMousePos().y < pallette.palleteRect.pos.y)
+		//{// = false;
+		//	ShowCursor(false);
+		//}
+		//else
+		//{
+		//	ShowCursor(true);
+		//}
 	}
 	void updateSelectedTile()
 	{
@@ -1095,15 +1621,14 @@ private:
 				*b + olc::vf2d(GetMousePos());
 			}
 		}
-		selectedTile.unplacable = isUnplacable();
 	}
 	bool OnUserCreate() override
 	{
 		//std::random_device rd();
 		mtEngine.seed(1794);
 		InitializeSpritesDecals();
-		playField = PlayField(m_resolution, m_cellTileGridSize);
 		SetBuiltInEdges();
+		playField = PlayField(m_resolution, m_cellTileGridSize);
 		initPallette();
 		initTetriminoes();
 		return true;
@@ -1111,9 +1636,10 @@ private:
 	bool OnUserUpdate(float fElapsedTime) override
 	{
 		updateSelectedTile();
-		
-		drawScreen(fElapsedTime);
 		controls(fElapsedTime);
+		UpdatePlayfield(fElapsedTime);
+		updateMouse();
+		drawScreen(fElapsedTime);
 		return true;
 	}
 
