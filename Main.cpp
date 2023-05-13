@@ -973,7 +973,7 @@ private:
 	}
 	void drawTetriminoes(float fElapsedTime)
 	{
-		
+		int palleteTetNum = 0;
 		for (auto i = pallette.pallettetetrisTiles.begin(); i < pallette.pallettetetrisTiles.end(); i++)
 		{
 			for (auto b	 = i->drawBlockPositions.begin(); b < i->drawBlockPositions.end(); b++)
@@ -994,6 +994,12 @@ private:
 				}
 			
 			}
+			float adjustment = 0;
+			if (palleteTetNum == 3 || palleteTetNum == 5) adjustment = -50;
+			DrawPartialDecal(i->blockPositions[0][0] + i->pallettePos + olc::vf2d{ adjustment, 50 }, { 48,48 },
+				SpriteSheets_Vec[AllBaseTiles[palleteTetNum][12].SheetNumber].sheetDecal.get(), AllBaseTiles[palleteTetNum][12].sourcpos,
+				olc::vf2d{ (float)m_resolution,(float)m_resolution });
+			palleteTetNum++;
 		}
 		if (m_BeginCollapse)
 		{
@@ -1591,20 +1597,20 @@ private:
 				}
 			}
 		}
-		//for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
-		//{
-		//	for (auto b = i->begin(); b < i->end(); b++)
-		//	{
-		//		if (CheckCollision(olc::vf2d(GetMousePos())+*b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
-		//		{
-		//			selectedTile.unplacable = true;
-		//		}
-		//	/*	else
-		//		{
-		//			selectedTile.unplacable = false;
-		//		}*/
-		//	}
-		//}
+		for (auto i = selectedTile.blockPositions.begin(); i < selectedTile.blockPositions.end(); i++)
+		{
+			for (auto b = i->begin(); b < i->end(); b++)
+			{
+				if (CheckCollision(olc::vf2d(GetMousePos())+*b, pallette.palleteRect.pos, selectedTile.sizePerBlock, pallette.palleteRect.size))
+				{
+					selectedTile.unplacable = true;
+				}
+			/*	else
+				{
+					selectedTile.unplacable = false;
+				}*/
+			}
+		}
 		if (selectedTile.unplacable == true)
 		{
 			bool breakthis = true;
@@ -1688,6 +1694,56 @@ private:
 			}
 		}
 	}
+	int16_t NearbyCells(int y, int x)
+	{
+		int16_t mostnearby = 7;
+		std::vector<int> typeofTerrain = { 0,0,0,0,0,0,0,0 };
+		int typettoIncrease = -1;
+		if (y > 0)
+		{
+			typettoIncrease = playField.playfieldCells[y - 1][x].tilesInCell[0][0].tiletype;
+			if(typettoIncrease>=0)
+			typeofTerrain[typettoIncrease]++;
+		}
+		if (x > 0)
+		{
+			typettoIncrease = playField.playfieldCells[y][x-1].tilesInCell[0][0].tiletype;
+			if (typettoIncrease >= 0)
+				typeofTerrain[typettoIncrease]++;
+		}
+		if (y < playField.playfieldCells.size() - 1)
+		{
+			typettoIncrease = playField.playfieldCells[y + 1][x].tilesInCell[0][0].tiletype;
+			if (typettoIncrease >= 0)
+				typeofTerrain[typettoIncrease]++;
+		}
+		if (x < playField.playfieldCells[0].size()-1)
+		{
+			typettoIncrease = playField.playfieldCells[y][x+1].tilesInCell[0][0].tiletype;
+			if (typettoIncrease >= 0)
+				typeofTerrain[typettoIncrease]++;
+		}
+		typettoIncrease = 0;
+		for (int i = 0; i < typeofTerrain.size(); i++)
+		{
+			if (typettoIncrease < typeofTerrain[i])
+			{
+				typettoIncrease = typeofTerrain[i];
+				mostnearby = i;
+			}
+		}
+		std::vector<int> allnearbytypes;
+		for (int i = 0; i < typeofTerrain.size(); i++)
+		{
+			if (typeofTerrain[i]== typettoIncrease)
+			{
+				allnearbytypes.push_back(i);
+			}
+		}
+		if (allnearbytypes.size() == 0) return mostnearby;
+		std::uniform_int_distribution<int16_t> returnTerrainType(0,allnearbytypes.size()-1);
+		return allnearbytypes[returnTerrainType(mtEngine)];
+	}
 	void ExplodePlayfield(PlayField& playfield_)
 	{
 		for (int tet = 0; tet < playfield_.tetrisTiles.size(); tet++)
@@ -1703,8 +1759,18 @@ private:
 							if (!CheckCollision(playfield_.tetrisTiles[tet].blockPositions[blockY][blockX] + playfield_.tetrisTiles[tet].placedPos, playfield_.playfieldCells[y][x].cell.pos,
 								playfield_.tetrisTiles[tet].sizePerBlock, playfield_.playfieldCells[y][x].cell.size))
 							{
-								std::uniform_int_distribution<uint16_t> dist(0, 6);
+								std::uniform_int_distribution<int16_t> dist(0, 6);
 								int16_t tempType = dist(mtEngine);
+								int16_t nearTypes = NearbyCells(y, x);
+								if (nearTypes < 7)
+								{
+									std::uniform_int_distribution<int16_t> distChange(0, 100);
+									if (distChange(mtEngine) > 35)
+									{
+										tempType = nearTypes;
+									}
+								}
+
 								for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
 								{
 									for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
