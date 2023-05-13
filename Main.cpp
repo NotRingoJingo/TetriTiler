@@ -152,21 +152,24 @@ public:
 				tile.tilesAvailable.erase(tile.tilesAvailable.begin() + i);
 				i--;
 			}*/
-			if (CompareAllEdges(tile, Edge{ -1,-1,-1 }))
+			if (CompareAllEdges(tile.tilesAvailable[i], Edge{ -1,-1,-1 }))
 			{
 				tile.tilesAvailable.erase(tile.tilesAvailable.begin() + i);
 				i--;
 			}
 		}
 	}
-	bool CompareAllEdges(Tile t,Edge eToCompare)
+	bool CompareAllEdges(SpriteTile& t,Edge eToCompare)
 	{
-		if (EdgeComparison(t.north, eToCompare) && EdgeComparison(t.east, eToCompare) && EdgeComparison(t.south, eToCompare) && EdgeComparison(t.west, eToCompare)) return true;
+		if (EdgeComparison(t.north, eToCompare) && EdgeComparison(t.east, eToCompare) && EdgeComparison(t.south, eToCompare) && EdgeComparison(t.west, eToCompare))
+		{
+			return true;
+		}
 		return false;
 	}
 	void CompareTiles(Tile& a, Tile& b,int edgeToCompare)
 	{
-		if (b.tiletype < 1) return;
+		//if (b.tiletype >=0 &&!b.collapsed) return;
 		for (uint16_t i = 0; i < a.tilesAvailable.size(); i++)
 		{
 			Edge aEdgeTranslated = a.tilesAvailable[i].north;
@@ -208,27 +211,27 @@ public:
 			}
 			if (b.tiletype >= 0 && bEdgeTranslated.cornerA == -1 && bEdgeTranslated.cornerB == -1 && bEdgeTranslated.side == -1&&!b.collapsed)
 			{
-				//bEdgeTranslated = { b.tiletype,b.tiletype,b.tiletype };
+				bEdgeTranslated = { b.tiletype,b.tiletype,b.tiletype };
 				if (!EdgeComparisonBeforeCollapse(aEdgeTranslated, bEdgeTranslated, b.tiletype))
 				{
 					a.tilesAvailable.erase(a.tilesAvailable.begin() + i);
 					//a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), i), a.tilesAvailable.end());
 					i--;
 				}
-			}
-			else if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
+			}else
+			 if (!EdgeComparison(aEdgeTranslated, bEdgeTranslated))
 			{
 				a.tilesAvailable.erase(a.tilesAvailable.begin() + i);
 				//a.tilesAvailable.erase(std::remove(a.tilesAvailable.begin(), a.tilesAvailable.end(), i), a.tilesAvailable.end());
 				i--;
 			}
 		}
-		if (a.tilesAvailable.size()<1)
+		/*if (a.tilesAvailable.size()<1)
 		{
 			a.tilesAvailable.push_back(AllBaseTiles[a.tiletype][12]);
 			fuckupcount++;
 			std::cout << fuckupcount << std::endl;
-		}
+		}*/
 	}
 	bool EdgeComparisonBeforeCollapse(Edge a, Edge b,int16_t typeofTile)
 	{
@@ -365,21 +368,21 @@ public:
 				{
 				case 0:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
-					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 1:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
-					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 2:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
-					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 3:
 					AllBaseTiles[i][j].north = { eT,eT,eT };
@@ -430,21 +433,22 @@ public:
 					AllBaseTiles[i][j].west = { -2,-2,-2 };
 					break;
 				case 11:
-					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].south = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 12:
+					//if(eT == -1)
 					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 13:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
-					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 14:
@@ -496,22 +500,22 @@ public:
 					AllBaseTiles[i][j].west = { -2,-2,-2 };
 					break;
 				case 22:
-					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
 					AllBaseTiles[i][j].west = { eT,eT,eT };
 					break;
 				case 23:
 					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 24:
-					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].north = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].east = { eT,eT,eT };
 					AllBaseTiles[i][j].south = { eT,eT,eT };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,eT };
+					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 25:
 					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
@@ -533,9 +537,9 @@ public:
 					break;
 				case 28:
 					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].east = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].east = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					AllBaseTiles[i][j].south = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
-					AllBaseTiles[i][j].west = { AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
+					AllBaseTiles[i][j].west = { eT,AllBaseTiles[i][j].tiletype,AllBaseTiles[i][j].tiletype };
 					break;
 				case 29:
 					AllBaseTiles[i][j].north = { eT,AllBaseTiles[i][j].tiletype,eT };
@@ -1374,12 +1378,30 @@ private:
 		}
 		return false;
 	}
-
+	void CollapseFirstCell(int gridx, int gridy)
+	{
+		Tile* t = &playField.playfieldCells[gridy][gridx].tilesInCell[1][1];
+		uint16_t tA = 12;
+		if (t->collapsed) return;
+		//tA = dist(mtEngine);
+		t->tileToDraw = t->tilesAvailable[tA];
+		t->tileNumber = t->tilesAvailable[tA].tileNumber;
+		t->tiletype = t->tilesAvailable[tA].tiletype;
+		int16_t ttype = t->tiletype;
+		if (ttype == -1) ttype = 7;
+		t->east = AllBaseTiles[ttype][t->tileNumber].east;
+		t->north = AllBaseTiles[ttype][t->tileNumber].north;
+		t->west = AllBaseTiles[ttype][t->tileNumber].west;
+		t->south = AllBaseTiles[ttype][t->tileNumber].south;
+		t->collapsed = true;
+		// .tileNumber = AllBaseTiles[playField.playfieldCells[gridy][gridx].tilesInCell[1][1].tiletype //nullptr;// = playboard_[0][0];
+	}
 	void CheckGridForCollapse(PlayField& playboard)
 	{
 		//std::vector<std::vector<Tile>> playboard_ = playboard;
 		Tile* t = nullptr;// = playboard_[0][0];
 		uint16_t lowestpossible = UINT16_MAX;
+		int haf = 0;
 		for (uint32_t celly = 0; celly < playboard.playfieldCells.size(); celly++)
 		{
 			for (uint32_t cellx = 0; cellx < playboard.playfieldCells[celly].size(); cellx++)
@@ -1393,6 +1415,7 @@ private:
 						//remove this todo segment once done
 						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype < 0) continue;
 						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].collapsed) continue;
+						if (t != nullptr) continue;
 						if (x > 0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y][x - 1], 3);
 						else if(cellx>0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx-1].tilesInCell[y][m_cellTileGridSize-1], 3);
 						if (y > 0) CompareTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x], playboard.playfieldCells[celly][cellx].tilesInCell[y - 1][x], 0);
@@ -1407,7 +1430,37 @@ private:
 							lowestpossible = playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.size();
 							t = &playboard.playfieldCells[celly][cellx].tilesInCell[y][x];
 						}
-
+						if (playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.size() == 0)
+						{
+							//playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable = AllBaseTiles[playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype];
+							if (haf<3)
+							{
+								for (int i = 0; i < AllBaseTiles.size(); i++)
+								{
+									for (int j = 0; j < AllBaseTiles[i].size(); j++)
+									{
+										//if (TileEdgeContains(AllBaseTiles[7][i], playboard.playfieldCells[y][x].tilesInCell[y][x].tiletype))|| i == 7
+										//{
+										if (i == playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype )
+										{
+											playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.push_back(AllBaseTiles[i][j]);
+										}
+										//}
+									}
+								}
+							}
+							//RemoveEmptyTiles(playboard.playfieldCells[celly][cellx].tilesInCell[y][x]);
+							if (haf>=3)
+							{
+								playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tilesAvailable.push_back(AllBaseTiles[playboard.playfieldCells[celly][cellx].tilesInCell[y][x].tiletype][12]);
+								t = &playboard.playfieldCells[celly][cellx].tilesInCell[y][x];
+								break;
+							}
+							x--;
+							t = nullptr;
+							haf++;
+						}
+						//if empty refill and check again. if fail twice then crash
 					}
 				}
 			}
@@ -1568,9 +1621,30 @@ private:
 				selectedTile.placedPos = olc::vf2d(celltoplace);
 				playField.tetrisTiles.emplace_back(selectedTile);
 				setCellTypes(playField);
+				for (int y = 0; y < playField.playfieldCells.size(); y++)
+				{
+					for (int x = 0; x < playField.playfieldCells[y].size(); x++)
+					{
+						if (CheckCollision(playField.playfieldCells[y][x].cell.pos, selectedTile.placedPos, { 48,48 }, { 48,48 }))
+						{
+							if (playField.playfieldCells[y][x].tilesInCell[1][1].tiletype >= 0)
+								CollapseFirstCell(x, y);
+				
+						}
+					}
+				}
 				m_BeginCollapse = true;
 			}
 		}
+	}
+
+	bool TileEdgeContains(SpriteTile t, int16_t e)
+	{
+		if (t.east.cornerA == e || t.east.side == e || t.east.cornerB == e) return true;
+		if (t.north.cornerA == e || t.north.side == e || t.north.cornerB == e) return true;
+		if (t.west.cornerA == e || t.west.side == e || t.west.cornerB == e) return true;
+		if (t.south.cornerA == e || t.south.side == e || t.south.cornerB == e) return true;
+		return false;
 	}
 
 	void setCellTypes(PlayField& playfield_)
@@ -1596,11 +1670,14 @@ private:
 										{
 											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = selectedTile.tileType;
 											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
-											for (int i = 0; i < AllBaseTiles[7].size(); i++)
+											/*for (int i = 0; i < AllBaseTiles[7].size(); i++)
 											{
-												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
-											}
-											RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+												if (TileEdgeContains(AllBaseTiles[7][i], playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype))
+												{
+													playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+												}
+											}*/
+											//RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
 										}
 									}
 								}
@@ -1635,13 +1712,16 @@ private:
 										if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
 										{
 
-											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType;
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType; //selectedTile.tileType;
 											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
-											for (int i = 0; i < AllBaseTiles[7].size(); i++)
+										/*	for (int i = 0; i < AllBaseTiles[7].size(); i++)
 											{
-												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
-											}
-											RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+												if (TileEdgeContains(AllBaseTiles[7][i], playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype))
+												{
+													playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+												}
+											}*/
+											//RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
 										}
 									}
 								}
