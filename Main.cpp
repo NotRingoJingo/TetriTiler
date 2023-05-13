@@ -18,6 +18,8 @@ namespace fs = std::filesystem;
 std::unique_ptr<olc::Platform> thisPlatform(olc::platform.get());
 
 #define M_PI 3.14159265358979323846
+float sWidth;
+float sHeight;
 class Engine : public olc::PixelGameEngine
 {
 public:
@@ -42,6 +44,23 @@ public:
 		olc::vf2d pos;
 		olc::vf2d size;
 	};
+	enum buttontypes
+	{
+		save = 0,
+		explode = 1,
+		clear = 2,
+	};
+	struct buttons
+	{
+		Rect buttonBox;
+		olc::Pixel color = olc::GREY;
+		bool selected = false;
+		bool pressed = false;
+		std::string name;
+		int type;
+	};
+	
+	
 	struct SpriteSheet
 	{
 		std::unique_ptr<olc::Sprite> sheet;
@@ -75,7 +94,33 @@ public:
 		bool collapsed = false;
 		std::vector<SpriteTile> tilesAvailable;
 	};
+	struct gui
+	{
+		std::vector<buttons> guiButtons;
+		Rect guiRect;
+		olc::Pixel guiColor = olc::WHITE;
+		void guiInit()
+		{
+			guiRect.pos.x =  sWidth - 100;
+			guiRect.pos.y = 0;
+			guiRect.size.x = 148;
+			guiRect.size.y = sHeight - 152;
+			for (int i = 0; i < 3; i++)
+			{
+				buttons newButton;
+				newButton.buttonBox.pos.x = guiRect.pos.x + 10;
+				newButton.buttonBox.pos.y = guiRect.pos.y + 50 + 50 *i;
+				newButton.buttonBox.size = { 80,30 };
+				newButton.type = i;
+				guiButtons.emplace_back(newButton);
+			}
+			guiButtons[0].name = "Save";
+			guiButtons[1].name = "Explode";
+			guiButtons[2].name = "Clear";
+		}
+	};
 	std::vector<std::vector<SpriteTile>> AllBaseTiles;
+	int mapNum = 1;
 	void SetEdge(SpriteTile& t, int edgeToSet, int16_t a, int16_t s, int16_t b)
 	{
 		switch (edgeToSet)
@@ -901,6 +946,7 @@ private:
 			
 		}
 	};
+	gui Gui;
 	Pallete pallette;
 	PlayField playField;
 	std::vector<tetriminoes>tetrisTiles;
@@ -1033,9 +1079,35 @@ private:
 			}
 		}
 	}
-
+	void drawButtons(float fElapsedTime)
+	{
+		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+		{
+			if (i->selected==false&&i->pressed == false)
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, i->color);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+			else if (i->selected == true&&i->pressed == false)
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size,olc::YELLOW);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+			else
+			{
+				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, olc::RED);
+				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+			}
+		}
+	}
+	void drawGuiRect()
+	{
+		FillRectDecal(Gui.guiRect.pos, Gui.guiRect.size, Gui.guiColor);
+	}
 	void drawScreen(float fElapsedTime)
 	{
+		drawGuiRect();
+		drawButtons(fElapsedTime);
 		drawPalletteField(fElapsedTime);
 		drawTiles(fElapsedTime);
 		drawPlayfield(fElapsedTime);
@@ -1122,10 +1194,21 @@ private:
 		int width, height;
 		if (capture_window_to_bitmap(hWnd, x, y,w, h, image_data, width, height)) {
 			// Save the captured image to a PNG file
-			save_Png("captured_image.png", image_data, width, height, x, y, w, h);
+			const char* name = "map";
+			
+			std::stringstream ss;
+			ss << name << mapNum<<".png";
+			save_Png(ss.str().c_str(), image_data, width, height, x, y, w, h);
+			mapNum++;
 			//delete[] image_data;
 		}
-		
+		//+ std::to_string(mapNum)
+	}
+	std::string mapName()
+	{
+		std::string s;
+		s = "map" + mapNum;
+		return s;
 	}
 	bool capture_window_to_bitmap(HWND hWnd, int x, int y, int w, int h, BYTE*& image_data, int& width, int& height) {
 		// Get the window's device context
@@ -1133,11 +1216,15 @@ private:
 		HDC hdcWindow = GetDC(hWnd);
 
 		// Get the dimensions of the window
-		RECT rect;
+		/*RECT rect;*/
 		//GetClientRect(hWnd, &rect);
 		int window_width = w;
 		int window_height = h;
-
+		COLORREF color = GetPixel(hdcWindow, x, y);
+		BYTE blue = GetBValue(color);
+		
+		BYTE green = GetGValue(color);
+		BYTE red = GetRValue(color);
 		// Create a memory device context and a memory bitmap
 		HDC hdcMem = CreateCompatibleDC(hdcWindow);
 		HBITMAP hBitmap = CreateCompatibleBitmap(hdcWindow, window_width, window_height);
@@ -1155,10 +1242,15 @@ private:
 
 			width = w;
 			height = h;
+			COLORREF color = GetPixel(hdcWindow, x, y);
+			BYTE blue = GetBValue(color);
+			BYTE green = GetGValue(color);
+			BYTE red = GetRValue(color);
 
 			// Allocate memory for the image data
 			image_data = new BYTE[w * h * 4]; // RGBA
 			std::cout << " " + *image_data;
+			
 			// Copy the image data from the bitmap to the image buffer
 			BITMAPINFO bmi = { 0 };
 			bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -1166,15 +1258,23 @@ private:
 			bmi.bmiHeader.biHeight = -window_height; // negative height to indicate top-down bitmap
 			bmi.bmiHeader.biPlanes = 1;
 			bmi.bmiHeader.biBitCount = 32;
-			//bmi.bmiHeader.biCompression = BI_RGB;
+		//	bmi.bmiHeader.biCompression = BI_RGB;
 			HBITMAP hDIB = CreateDIBSection(hdcMem, &bmi, DIB_RGB_COLORS, (void**)&image_data, NULL, 0);
 			if (hDIB!=NULL)
 			{
-				int iBytes = (((width * 32) + 31) / 32) * 4 * height;
+				//unsigned char* pixel = image_data;
+				int iBytes = (((width *32) + 31) / 32) * 4 * height;
+				
 				bsuccess = GetBitmapBits(hBitmap, iBytes, image_data);
 				if (bsuccess)
 				{
-					
+					BYTE temp;
+					for (int i = 0; i < width * height * 4; i += 4)
+					{
+						temp = image_data[i];
+						image_data[i] = image_data[i + 2];
+						image_data[i + 2] = temp;
+					}
 				}
 			}
 			//GetDIBits(hdcMem, hBitmap, y, h, image_data, &bmi, DIB_RGB_COLORS);
@@ -1633,12 +1733,53 @@ private:
 		}
 		m_BeginCollapse = true;
 	}
+	void mouseControls()
+	{
+		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+		{
+			if (CheckCollision(i->buttonBox.pos,olc::vf2d(GetMousePos().x-10,GetMousePos().y-10),i->buttonBox.size,{20,20}))
+			{
+				i->selected = true;
+			}
+			else
+			{
+				i->selected = false;
+			}
+		}
+		if (GetMouse(olc::Mouse::LEFT).bReleased)
+		{
+
+
+			for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
+			{
+				if (i->selected == true)
+				{
+					switch (i->type)
+					{
+					case save:
+						makePng();
+						break;
+					case explode:
+
+						ExplodePlayfield(playField);
+						fastCollapse = true;
+						break;
+					case clear:
+						break;
+					default:
+						break;
+					}
+				}
+			}
+		}
+	}
 	void controls(float fElapsedTime)
 	{
 		
 		selectTile();
 		placeTile();
-		keyBoardcontrols();
+		mouseControls();
+		//keyBoardcontrols();
 	}
 	void keyBoardcontrols()
 	{
@@ -1673,6 +1814,7 @@ private:
 			}
 		}
 	}
+	
 	bool OnUserCreate() override
 	{
 		//std::random_device rd();
@@ -1682,6 +1824,7 @@ private:
 		playField = PlayField(m_resolution, m_cellTileGridSize);
 		initPallette();
 		initTetriminoes();
+		Gui.guiInit();
 		return true;
 	}
 	bool OnUserUpdate(float fElapsedTime) override
@@ -1706,7 +1849,8 @@ int main()
 	Engine Game;
 	if (Game.Construct(1200, 900, 1, 1))
 	{
-	
+		sWidth = Game.ScreenWidth();
+		sHeight = Game.ScreenHeight();
 
 		Game.Start();
 	}
