@@ -29,6 +29,8 @@ public:
 		sAppName = "TetriTiler";
 	}
 	std::mt19937 mtEngine;
+	std::unique_ptr<olc::Sprite > logoSprite;
+	std::unique_ptr<olc::Decal > logoDec;
 	std::vector<std::unique_ptr<olc::Sprite>> spriteSheets;
 	std::vector<std::unique_ptr<olc::Decal>> vecS_Decals;
 	uint16_t m_cellTileGridSize = 3;
@@ -101,16 +103,16 @@ public:
 		olc::Pixel guiColor = olc::WHITE;
 		void guiInit()
 		{
-			guiRect.pos.x =  sWidth - 100;
-			guiRect.pos.y = 0;
-			guiRect.size.x = 148;
-			guiRect.size.y = sHeight - 152;
+			guiRect.pos.x =  sWidth/2;
+			guiRect.pos.y = 10;
+			guiRect.size.x = sWidth/2;
+			guiRect.size.y = sHeight/4;
 			for (int i = 0; i < 3; i++)
 			{
 				buttons newButton;
-				newButton.buttonBox.pos.x = guiRect.pos.x + 10;
-				newButton.buttonBox.pos.y = guiRect.pos.y + 50 + 50 *i;
-				newButton.buttonBox.size = { 80,30 };
+				newButton.buttonBox.pos.x = guiRect.pos.x + 50+200 * i;
+				newButton.buttonBox.pos.y = guiRect.pos.y + 50;// *i;
+				newButton.buttonBox.size = { 145,100 };
 				newButton.type = i;
 				guiButtons.emplace_back(newButton);
 			}
@@ -254,6 +256,8 @@ public:
 	}
 	void InitializeSpritesDecals()
 	{
+		logoSprite = std::make_unique<olc::Sprite>("./TetriTilerLogovZero.png");
+		logoDec = std::make_unique<olc::Decal>(logoSprite.get());
 		std::string path = "./assets";
 		std::vector<std::filesystem::path> fileNames;
 		std::vector<std::string> extensionTypes = { ".png",".jpg",".bmp" };
@@ -1087,28 +1091,34 @@ private:
 	}
 	void drawButtons(float fElapsedTime)
 	{
+		olc::vf2d adjustment = { 0,0 };
+		int j = 0;
 		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
 		{
+			if (j == 1) adjustment = { -20,0 };
+			else adjustment = { 0,0 };
 			if (i->selected==false&&i->pressed == false)
 			{
 				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, i->color);
-				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+				DrawStringDecal(olc::vf2d{ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }+adjustment, i->name, olc::BLACK, { 2,2 });
 			}
 			else if (i->selected == true&&i->pressed == false)
 			{
 				FillRectDecal(i->buttonBox.pos, i->buttonBox.size,olc::YELLOW);
-				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+				DrawStringDecal(olc::vf2d{ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 } + adjustment, i->name, olc::BLACK, { 2,2 });
 			}
 			else
 			{
 				FillRectDecal(i->buttonBox.pos, i->buttonBox.size, olc::RED);
-				DrawStringDecal({ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 }, i->name, olc::BLACK);
+				DrawStringDecal(olc::vf2d{ i->buttonBox.pos.x + i->buttonBox.size.x / 4,i->buttonBox.pos.y + i->buttonBox.size.y / 3 } + adjustment, i->name, olc::BLACK, { 2,2 });
 			}
+			j++;
 		}
 	}
 	void drawGuiRect()
 	{
 		FillRectDecal(Gui.guiRect.pos, Gui.guiRect.size, Gui.guiColor);
+		DrawDecal(olc::vf2d{ (float)ScreenWidth() / 2, ((float)ScreenHeight() / 2) - logoDec.get()->sprite->height/2} , logoDec.get());
 	}
 	void drawScreen(float fElapsedTime)
 	{
@@ -1573,6 +1583,7 @@ private:
 	{// { 50,50 }
 		if (m_BeginCollapse)return;
 		selectedTile.unplacable = false;
+		if (selectedTile.tileType == 8) selectedTile.unplacable = true;
 		for (auto s = selectedTile.blockPositions.begin(); s < selectedTile.blockPositions.end(); s++)
 		{
 			for (auto t = s->begin(); t < s->end(); t++)
@@ -1746,54 +1757,99 @@ private:
 	}
 	void ExplodePlayfield(PlayField& playfield_)
 	{
-		for (int tet = 0; tet < playfield_.tetrisTiles.size(); tet++)
+		if (playfield_.tetrisTiles.size() > 0)
 		{
-			for (int blockY = 0; blockY < playfield_.tetrisTiles[tet].blockPositions.size(); blockY++)
+			for (int tet = 0; tet < playfield_.tetrisTiles.size(); tet++)
 			{
-				for (int blockX = 0; blockX < playfield_.tetrisTiles[tet].blockPositions[blockY].size(); blockX++)
+				for (int blockY = 0; blockY < playfield_.tetrisTiles[tet].blockPositions.size(); blockY++)
 				{
-					for (int y = 0; y < playfield_.playfieldCells.size(); y++)
+					for (int blockX = 0; blockX < playfield_.tetrisTiles[tet].blockPositions[blockY].size(); blockX++)
 					{
-						for (int x = 0; x < playfield_.playfieldCells[y].size(); x++)
+						for (int y = 0; y < playfield_.playfieldCells.size(); y++)
 						{
-							if (!CheckCollision(playfield_.tetrisTiles[tet].blockPositions[blockY][blockX] + playfield_.tetrisTiles[tet].placedPos, playfield_.playfieldCells[y][x].cell.pos,
-								playfield_.tetrisTiles[tet].sizePerBlock, playfield_.playfieldCells[y][x].cell.size))
+							for (int x = 0; x < playfield_.playfieldCells[y].size(); x++)
 							{
-								std::uniform_int_distribution<int16_t> dist(0, 6);
-								int16_t tempType = dist(mtEngine);
-								int16_t nearTypes = NearbyCells(y, x);
-								if (nearTypes < 7)
+								if (!CheckCollision(playfield_.tetrisTiles[tet].blockPositions[blockY][blockX] + playfield_.tetrisTiles[tet].placedPos, playfield_.playfieldCells[y][x].cell.pos,
+									playfield_.tetrisTiles[tet].sizePerBlock, playfield_.playfieldCells[y][x].cell.size))
 								{
-									std::uniform_int_distribution<int16_t> distChange(0, 100);
-									if (distChange(mtEngine) > 35)
+									std::uniform_int_distribution<int16_t> dist(0, 6);
+									int16_t tempType = dist(mtEngine);
+									int16_t nearTypes = NearbyCells(y, x);
+									if (nearTypes < 7)
 									{
-										tempType = nearTypes;
-									}
-								}
-
-								for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
-								{
-									for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
-									{
-										if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
+										std::uniform_int_distribution<int16_t> distChange(0, 100);
+										if (distChange(mtEngine) > 35)
 										{
+											tempType = nearTypes;
+										}
+									}
 
-											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType; //selectedTile.tileType;
-											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
-										/*	for (int i = 0; i < AllBaseTiles[7].size(); i++)
+									for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
+									{
+										for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
+										{
+											if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
 											{
-												if (TileEdgeContains(AllBaseTiles[7][i], playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype))
-												{
-													playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
-												}
-											}*/
-											//RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+
+												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType; //selectedTile.tileType;
+												playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
+												/*	for (int i = 0; i < AllBaseTiles[7].size(); i++)
+													{
+														if (TileEdgeContains(AllBaseTiles[7][i], playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype))
+														{
+															playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+														}
+													}*/
+													//RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+											}
 										}
 									}
 								}
 							}
 						}
 					}
+				}
+			}
+		}
+		else
+		{
+			for (int y = 0; y < playfield_.playfieldCells.size(); y++)
+			{
+				for (int x = 0; x < playfield_.playfieldCells[y].size(); x++)
+				{
+					std::uniform_int_distribution<int16_t> dist(0, 6);
+					int16_t tempType = dist(mtEngine);
+					int16_t nearTypes = NearbyCells(y, x);
+					if (nearTypes < 7)
+					{
+						std::uniform_int_distribution<int16_t> distChange(0, 100);
+						if (distChange(mtEngine) > 35)
+						{
+							tempType = nearTypes;
+						}
+					}
+
+					for (int cy = 0; cy < playfield_.playfieldCells[y][x].tilesInCell.size(); cy++)
+					{
+						for (int cx = 0; cx < playfield_.playfieldCells[y][x].tilesInCell[cy].size(); cx++)
+						{
+							if (!playfield_.playfieldCells[y][x].tilesInCell[cy][cx].collapsed)
+							{
+
+								playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype = tempType; //selectedTile.tileType;
+								playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable = AllBaseTiles[playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype];
+								/*	for (int i = 0; i < AllBaseTiles[7].size(); i++)
+									{
+										if (TileEdgeContains(AllBaseTiles[7][i], playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tiletype))
+										{
+											playfield_.playfieldCells[y][x].tilesInCell[cy][cx].tilesAvailable.push_back(AllBaseTiles[7][i]);
+										}
+									}*/
+									//RemoveEmptyTiles(playfield_.playfieldCells[y][x].tilesInCell[cy][cx]);
+							}
+						}
+					}
+
 				}
 			}
 		}
