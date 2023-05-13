@@ -1799,6 +1799,10 @@ private:
 		}
 		m_BeginCollapse = true;
 	}
+	void clearPlayfield()
+	{
+		playField.tetrisTiles.clear();
+	}
 	void mouseControls()
 	{
 		for (auto i = Gui.guiButtons.begin(); i < Gui.guiButtons.end(); i++)
@@ -1831,6 +1835,7 @@ private:
 						fastCollapse = true;
 						break;
 					case clear:
+						clearPlayfield();
 						break;
 					default:
 						break;
