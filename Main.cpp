@@ -949,6 +949,58 @@ private:
 			}
 			
 		}
+		void redoPlayField(uint16_t resolution, uint16_t cellTileGridSize)
+		{
+			int x = 0;
+			int y = 0;
+			playfieldCells.resize(15);
+			for (int i = 0; i < playfieldCells.size(); i++)
+			{
+				playfieldCells[i].resize(10);
+			}
+			for (auto i = playfieldCells.begin(); i < playfieldCells.end(); i++)
+			{
+				for (auto b = i->begin(); b < i->end(); b++)
+				{
+					b->cell.pos = olc::vf2d(0 + (resolution * cellTileGridSize) * x, 0 + (resolution * cellTileGridSize) * y);
+					b->cell.size = olc::vf2d(resolution * cellTileGridSize, resolution * cellTileGridSize);
+					for (uint16_t j = 0; j < cellTileGridSize; j++)
+					{
+						std::vector<Tile> tilesToAdd;
+						for (uint16_t k = 0; k < cellTileGridSize; k++)
+						{
+							Tile t;
+							t.tiletype = -1;
+							t.east = { -1,-1,-1 };
+							t.west = { -1,-1,-1 };
+							t.north = { -1,-1,-1 };
+							t.south = { -1,-1,-1 };
+							olc::vf2d dPos, dSize;
+							dPos = b->cell.pos + olc::vf2d{ float(k * resolution),float(j * resolution) };
+							dSize.x = resolution;
+							dSize.y = resolution;
+							t.rect.pos = dPos;
+							t.rect.size = dSize;
+
+							tilesToAdd.push_back(t);
+						}
+						b->tilesInCell.push_back(tilesToAdd);
+					}
+					x++;
+					playFieldRect.size.x = b->cell.pos.x + 10;
+					playFieldRect.size.y = b->cell.pos.y + 10;
+				}
+				x = 0;
+				y++;
+			}
+
+		}
+		void flushPlayfield()
+		{
+			playfieldCells.clear();
+			tetrisTiles.clear();
+			
+		}
 	};
 	gui Gui;
 	Pallete pallette;
@@ -1857,7 +1909,8 @@ private:
 	}
 	void clearPlayfield()
 	{
-		playField.tetrisTiles.clear();
+		playField.flushPlayfield();
+		playField.redoPlayField(m_resolution, m_cellTileGridSize);
 	}
 	void mouseControls()
 	{
